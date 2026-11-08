@@ -1,0 +1,10 @@
+.DS_Store
+/beets-ui
+*_templ.go
+
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+.direnv
+.pre-commit-config.yaml

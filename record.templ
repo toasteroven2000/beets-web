@@ -1,0 +1,138 @@
+package main
+
+import "strconv"
+
+templ recordView(p recordPage) {
+	@layout(recordTitle(p), p.Scope.Title()) {
+		<nav aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href={ templ.URL("/" + string(p.Scope)) }>{ p.Scope.Title() }</a></li>
+				if p.Album != nil {
+					<li class="breadcrumb-item"><a href={ templ.URL(recordURL(albums, p.Album.ID())) }>{ orDash(p.Album.Str("album")) }</a></li>
+				}
+				<li class="breadcrumb-item active" aria-current="page">{ recordTitle(p) }</li>
+			</ol>
+		</nav>
+		<div class="d-flex gap-3 align-items-start mb-3">
+			if p.Scope == albums {
+				<img class="album-art rounded border" src={ "/albums/" + strconv.Itoa(p.Record.ID()) + "/art" } alt="" onerror="this.remove()"/>
+			}
+			<div>
+				<h1 class="h2 mb-1">{ recordTitle(p) }</h1>
+				<div class="text-body-secondary">
+					if p.Scope == albums {
+						@artistLinks(p.Record.Str("albumartist"), p.Separators)
+					} else {
+						@artistLinks(p.Record.Str("artist"), p.Separators)
+					}
+					if y := yearText(p.Record); y != "" {
+						<span>{ " · " + y }</span>
+					}
+				</div>
+				if p.Scope == items {
+					<div class="small text-body-secondary font-monospace text-break">{ p.Record.Str("path") }</div>
+				}
+			</div>
+		</div>
+		if p.Scope == albums {
+			<ul class="nav nav-tabs mb-3">
+				<li class="nav-item">
+					<a class={ "nav-link", templ.KV("active", p.Tab == "items") } href={ templ.URL(recordTabURL(albums, p.Record.ID(), "items")) }>Items <span class="badge text-bg-secondary">{ strconv.Itoa(p.Items.Total) }</span></a>
+				</li>
+				<li class="nav-item">
+					<a class={ "nav-link", templ.KV("active", p.Tab == "fields") } href={ templ.URL(recordTabURL(albums, p.Record.ID(), "fields")) }>Fields</a>
+				</li>
+			</ul>
+		}
+		if p.Tab == "items" {
+			@recordTable(p.Items)
+		} else {
+			@recordForm(p)
+		}
+	}
+}
+
+func recordTitle(p recordPage) string {
+	if p.Scope == albums {
+		return orDash(p.Record.Str("album"))
+	}
+	return orDash(p.Record.Str("title"))
+}
+
+// recordForm Modifies one record. It lists every field A–Z; each carries its
+// current value, so only the ones you change are sent. fields.js filters it.
+templ recordForm(p recordPage) {
+	{{ editable, readOnly := recordFields(p.Record) }}
+	<form method="post" action="/modifications" data-field-form>
+		<input type="hidden" name="scope" value={ string(p.Scope) }/>
+		<input type="hidden" name="query" value={ "id:" + strconv.Itoa(p.Record.ID()) }/>
+		<div class="field-toolbar d-flex flex-wrap align-items-center gap-3 py-2 mb-2 border-bottom">
+			<input class="form-control form-control-sm field-filter" type="search" placeholder="Filter fields…" aria-label="Filter fields" data-filter/>
+			<div class="form-check form-switch mb-0">
+				<input class="form-check-input" type="checkbox" role="switch" id="popular-only" data-popular-only/>
+				<label class="form-check-label small" for="popular-only">Popular only</label>
+			</div>
+			<span class="small text-body-secondary" data-count></span>
+			<div class="ms-auto d-flex gap-2">
+				<button class="btn btn-sm btn-outline-secondary" type="reset">Reset</button>
+				<button class="btn btn-sm btn-primary">Preview changes</button>
+			</div>
+		</div>
+		<table class="table table-sm align-middle">
+			<thead>
+				<tr><th class="field-col">Field</th><th>Value</th><th class="text-center delete-col">Delete</th></tr>
+			</thead>
+			<tbody>
+				for _, key := range editable {
+					<tr data-field={ key } data-popular?={ isPopular(p.Scope, key) }>
+						<td class="font-monospace small">
+							<label for={ "f-" + key }>{ key }</label>
+							if isPopular(p.Scope, key) {
+								<span class="text-warning" title="Popular">★</span>
+							}
+						</td>
+						<td>
+							@fieldInput(key, p.Record.Str(key))
+						</td>
+						<td class="text-center"><input class="form-check-input" type="checkbox" name="delete" value={ key } aria-label={ "Delete " + key }/></td>
+					</tr>
+				}
+				for _, key := range readOnly {
+					<tr data-field={ key } class="text-body-secondary">
+						<td class="font-monospace small">{ key }</td>
+						<td class="small text-break">{ p.Record.Str(key) } <span class="badge text-bg-light border fw-normal">read-only</span></td>
+						<td></td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		<h2 class="h6">Add fields</h2>
+		@setRows(p.Scope, 2)
+	</form>
+	<script src={ assetURL("fields.js") }></script>
+}
+
+templ fieldInput(key, value string) {
+	<input type="hidden" name={ "o." + key } value={ value }/>
+	<input class="form-control form-control-sm" id={ "f-" + key } name={ "f." + key } value={ value }/>
+}
+
+// setRows are blank field/value rows for setting fields, with field names
+// suggested from beets' fields but free text allowed.
+templ setRows(k scope, n int) {
+	<datalist id={ "fields-" + string(k) }>
+		for _, f := range knownFields(k) {
+			<option value={ f }></option>
+		}
+	</datalist>
+	for i := 0; i < n; i++ {
+		<div class="row g-2 mb-2">
+			<div class="col-5 col-md-4">
+				<input class="form-control form-control-sm font-monospace" name="set_field" list={ "fields-" + string(k) } placeholder="field" aria-label="Field"/>
+			</div>
+			<div class="col-7 col-md-8">
+				<input class="form-control form-control-sm" name="set_value" placeholder="value, or a template like $title (Live)" aria-label="Value"/>
+			</div>
+		</div>
+	}
+}
