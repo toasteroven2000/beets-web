@@ -12,16 +12,20 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const pageSize = 100
 
 type server struct {
-	api *beetsAPI
+	api     *beetsAPI
+	art     *artSearch
+	pending pendingArt
 }
 
 func newServer(apiURL string, client *http.Client) *server {
-	return &server{api: &beetsAPI{base: strings.TrimRight(apiURL, "/"), http: client}}
+	return &server{api: &beetsAPI{base: strings.TrimRight(apiURL, "/"), http: client}, art: newArtSearch()}
 }
 
 func (s *server) routes() http.Handler {
@@ -36,6 +40,11 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /albums/{id}", s.handleRecord(albums))
 	mux.HandleFunc("GET /items/{id}", s.handleRecord(items))
 	mux.HandleFunc("GET /albums/{id}/art", s.handleArt)
+	mux.HandleFunc("GET /albums/{id}/art/search", s.handleArtSearch)
+	mux.HandleFunc("POST /albums/{id}/art", s.handleSetArt)
+	mux.HandleFunc("GET /albums/{id}/art/new/{token}", s.handleArtCompare)
+	mux.HandleFunc("GET /albums/{id}/art/new/{token}/image", s.handleArtPendingImage)
+	mux.HandleFunc("POST /albums/{id}/art/new/{token}", s.handleArtConfirm)
 	mux.HandleFunc("GET /modify", s.handleModifyForm)
 	mux.HandleFunc("POST /modifications", s.handleCreateModification)
 	mux.HandleFunc("GET /modifications", s.handleHistory)
@@ -256,30 +265,60 @@ func (s *server) handleRecord(k scope) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		ctx := r.Context()
-		rec, err := s.api.Get(ctx, k, id)
+		tab := r.URL.Query().Get("tab")
+		p, err := s.recordPage(r.Context(), k, id, tab)
 		if err != nil {
 			fail(w, err)
 			return
 		}
-		p := recordPage{Scope: k, Tab: "items", Record: rec, Separators: s.separators(ctx)}
-		if k == items || r.URL.Query().Get("tab") == "fields" {
-			p.Tab = "fields"
-		}
-		if k == albums {
-			res, err := s.api.List(ctx, items, "album_id:"+strconv.Itoa(id)+" disc+ track+", 1000, 0, listFields[items])
-			if err != nil {
-				fail(w, err)
-				return
-			}
-			p.Items = tableData{Scope: items, Query: "album_id:" + strconv.Itoa(id), Rows: res.Results, Total: res.Total, Separators: p.Separators}
-		} else if albumID := rec.Int("album_id"); albumID != 0 {
-			if album, err := s.api.Get(ctx, albums, albumID); err == nil {
-				p.Album = album
-			}
+		if r.URL.Query().Get("set") == "1" {
+			p.ArtNotice = "Art set."
 		}
 		render(w, http.StatusOK, recordView(p))
 	}
+}
+
+// recordPage loads a record page. An Album page has the tabs items, fields
+// and art; an Item page only shows its fields.
+func (s *server) recordPage(ctx context.Context, k scope, id int, tab string) (recordPage, error) {
+	rec, err := s.api.Get(ctx, k, id)
+	if err != nil {
+		return recordPage{}, err
+	}
+	p := recordPage{Scope: k, Tab: "items", Record: rec, Separators: s.separators(ctx)}
+	if k == items || tab == "fields" {
+		p.Tab = "fields"
+	} else if tab == "art" {
+		p.Tab = "art"
+	}
+	if k == albums {
+		res, err := s.api.List(ctx, items, "album_id:"+strconv.Itoa(id)+" disc+ track+", 1000, 0, listFields[items])
+		if err != nil {
+			return recordPage{}, err
+		}
+		p.Items = tableData{Scope: items, Query: "album_id:" + strconv.Itoa(id), Rows: res.Results, Total: res.Total, Separators: p.Separators}
+		if p.Tab == "art" {
+			p.Art = s.currentArt(ctx, id)
+			p.ArtQuery = strings.TrimSpace(rec.Str("albumartist") + " " + rec.Str("album"))
+			p.ArtPane = "search"
+		}
+	} else if albumID := rec.Int("album_id"); albumID != 0 {
+		if album, err := s.api.Get(ctx, albums, albumID); err == nil {
+			p.Album = album
+		}
+	}
+	return p, nil
+}
+
+// currentArt is an Album's art as beets-api serves it, if it has any.
+func (s *server) currentArt(ctx context.Context, id int) artInfo {
+	resp, err := s.api.AlbumArt(ctx, id)
+	if err != nil {
+		return artInfo{}
+	}
+	defer resp.Body.Close()
+	w, h := imageSize(resp.Body)
+	return artInfo{Exists: true, Width: w, Height: h}
 }
 
 func (s *server) handleArt(w http.ResponseWriter, r *http.Request) {
@@ -293,11 +332,13 @@ func (s *server) handleArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	for _, h := range []string{"Content-Type", "Content-Length", "ETag", "Last-Modified", "Cache-Control"} {
+	for _, h := range []string{"Content-Type", "Content-Length", "ETag", "Last-Modified"} {
 		if v := resp.Header.Get(h); v != "" {
 			w.Header().Set(h, v)
 		}
 	}
+	// Set art keeps the same URL, so the browser must check it each time.
+	w.Header().Set("Cache-Control", "no-cache")
 	io.Copy(w, resp.Body)
 }
 
@@ -442,4 +483,171 @@ func (s *server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render(w, http.StatusOK, historyView(p))
+}
+
+// handleArtSearch renders candidate art for the Art tab, loaded by htmx.
+func (s *server) handleArtSearch(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r)
+	if !ok {
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		render(w, http.StatusOK, artResults(id, nil, []string{"Enter something to search for."}))
+		return
+	}
+	ctx := r.Context()
+	found, problems := s.art.Search(ctx, q)
+	rankArt(found, s.artTarget(ctx, id))
+	render(w, http.StatusOK, artResults(id, found, problems))
+}
+
+// artTarget is what search results are matched against. If beets-api fails,
+// the zero target still ranks by size.
+func (s *server) artTarget(ctx context.Context, id int) artTarget {
+	rec, err := s.api.Get(ctx, albums, id)
+	if err != nil {
+		return artTarget{}
+	}
+	t := artTarget{Artist: rec.Str("albumartist"), Title: rec.Str("album"), Year: rec.Int("year")}
+	if res, err := s.api.List(ctx, items, "album_id:"+strconv.Itoa(id), 1, 0, []string{"id"}); err == nil {
+		t.Tracks = res.Total
+	}
+	return t
+}
+
+// handleSetArt takes an image from a URL (a search result's or one entered)
+// or an uploaded file. An Album without art gets it straight away; one with
+// art goes to the comparison first.
+func (s *server) handleSetArt(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	var data []byte
+	var source string
+	var err error
+	if err = r.ParseMultipartForm(maxArtBytes + 1<<20); err != nil && !errors.Is(err, http.ErrNotMultipart) {
+		err = errors.New("the upload is too large or broken")
+	} else if file, header, ferr := r.FormFile("file"); ferr == nil {
+		defer file.Close()
+		source = header.Filename
+		data, err = readImage(file)
+	} else if u := strings.TrimSpace(r.FormValue("url")); u != "" {
+		source = u
+		data, err = s.art.Fetch(ctx, u)
+	} else {
+		err = errors.New("choose an image, enter a URL or pick a file")
+	}
+	if err != nil {
+		s.artError(w, r, id, err.Error())
+		return
+	}
+	rec, err := s.api.Get(ctx, albums, id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if rec.Str("artpath") != "" {
+		token := s.pending.put(id, data, source)
+		http.Redirect(w, r, "/albums/"+strconv.Itoa(id)+"/art/new/"+token, http.StatusSeeOther)
+		return
+	}
+	s.setArt(w, r, id, data)
+}
+
+func (s *server) setArt(w http.ResponseWriter, r *http.Request, id int, data []byte) {
+	if err := s.api.SetAlbumArt(r.Context(), id, data); err != nil {
+		var e *apiError
+		if errors.As(err, &e) && e.Status != http.StatusNotFound && e.Status < 500 {
+			s.artError(w, r, id, e.Detail)
+			return
+		}
+		fail(w, err)
+		return
+	}
+	http.Redirect(w, r, recordTabURL(albums, id, "art")+"&set=1", http.StatusSeeOther)
+}
+
+// artError shows the Art tab again with what went wrong.
+func (s *server) artError(w http.ResponseWriter, r *http.Request, id int, msg string) {
+	p, err := s.recordPage(r.Context(), albums, id, "art")
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	p.ArtError = sentence(msg)
+	// Reopen the way you tried: a search result, a URL or a file.
+	switch {
+	case r.FormValue("candidate") != "":
+	case r.MultipartForm != nil && len(r.MultipartForm.File["file"]) > 0:
+		p.ArtPane = "file"
+	default:
+		p.ArtPane = "url"
+		p.ArtURL = r.FormValue("url")
+	}
+	render(w, http.StatusUnprocessableEntity, recordView(p))
+}
+
+func (s *server) pendingParams(w http.ResponseWriter, r *http.Request) (int, string, pendingImage, bool) {
+	id, ok := idParam(w, r)
+	if !ok {
+		return 0, "", pendingImage{}, false
+	}
+	token := r.PathValue("token")
+	img, ok := s.pending.get(id, token)
+	if !ok {
+		render(w, http.StatusNotFound, errorPage(http.StatusNotFound, "That image is no longer waiting to be set. Choose it again from the Art tab."))
+		return 0, "", pendingImage{}, false
+	}
+	return id, token, img, true
+}
+
+func (s *server) handleArtCompare(w http.ResponseWriter, r *http.Request) {
+	id, token, img, ok := s.pendingParams(w, r)
+	if !ok {
+		return
+	}
+	rec, err := s.api.Get(r.Context(), albums, id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	nw, nh := img.size()
+	render(w, http.StatusOK, artCompareView(artComparePage{
+		Album:   rec,
+		Token:   token,
+		Current: s.currentArt(r.Context(), id),
+		New:     artInfo{Exists: true, Width: nw, Height: nh},
+		Source:  img.source,
+	}))
+}
+
+func (s *server) handleArtPendingImage(w http.ResponseWriter, r *http.Request) {
+	_, _, img, ok := s.pendingParams(w, r)
+	if !ok {
+		return
+	}
+	t, _ := imageType(img.data)
+	w.Header().Set("Content-Type", t)
+	w.Write(img.data)
+}
+
+func (s *server) handleArtConfirm(w http.ResponseWriter, r *http.Request) {
+	id, token, img, ok := s.pendingParams(w, r)
+	if !ok {
+		return
+	}
+	s.pending.remove(token)
+	s.setArt(w, r, id, img.data)
+}
+
+// sentence capitalises the first letter of an error for display.
+func sentence(s string) string {
+	if s == "" {
+		return s
+	}
+	r, n := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + s[n:]
 }

@@ -55,18 +55,44 @@ type searchPage struct {
 
 type recordPage struct {
 	Scope      scope
-	Tab        string // an Album page's tab: "items" or "fields"
+	Tab        string // an Album page's tab: "items", "fields" or "art"
 	Record     record
 	Album      record    // an Item's Album, if it has one
 	Items      tableData // an Album's Items
 	Separators []string
+
+	// The Art tab.
+	Art       artInfo
+	ArtQuery  string // the search, prefilled with albumartist and album
+	ArtPane   string // the open way to Set art: "search", "url" or "file"
+	ArtURL    string // the URL last entered, kept when it fails
+	ArtError  string
+	ArtNotice string
+}
+
+// artInfo is an Album's current art.
+type artInfo struct {
+	Exists        bool
+	Width, Height int
+}
+
+func (a artInfo) Dims() string { return dimsText(a.Width, a.Height) }
+
+// artComparePage shows an Album's current art beside the image that would
+// replace it.
+type artComparePage struct {
+	Album   record
+	Token   string
+	Current artInfo
+	New     artInfo
+	Source  string
 }
 
 // recordTabURL links to a tab of an Album page.
 func recordTabURL(k scope, id int, tab string) string {
 	u := recordURL(k, id)
-	if tab == "fields" {
-		u += "?tab=fields"
+	if tab != "" && tab != "items" {
+		u += "?tab=" + tab
 	}
 	return u
 }

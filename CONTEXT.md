@@ -25,6 +25,10 @@ _Avoid_: Performer, band
 **Artist separators**:
 The strings that divide one credit into several Artists, `,` `;` and `&` by default. Words such as "and" or "feat." are not separators unless configured.
 
+**Album art**:
+The image file an Album points to with `artpath`, kept in the Album's directory.
+_Avoid_: Cover, artwork
+
 ### Changing metadata
 
 **Modify**:
@@ -46,3 +50,7 @@ _Avoid_: Diff, pretend, dry run
 **Confirm**:
 Approving a whole Preview so its changes get applied.
 _Avoid_: Approve, commit
+
+**Set art**:
+Making an image an Album's art, whether the Album had art or not. It replaces and deletes any previous art file straight away, so it isn't a Modification and has no Preview; when it replaces art, the UI shows the current and new art side by side first.
+_Avoid_: Upload, replace cover

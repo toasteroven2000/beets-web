@@ -14,3 +14,9 @@
 .field-filter { max-width: 16rem; }
 .field-col { width: 30%; }
 .delete-col { width: 4rem; }
+.art-none { aspect-ratio: 1; }
+.art-compare { max-height: 60vh; }
+/* htmx's own indicator styles are off (layout.templ), so: */
+.htmx-indicator { display: none; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: block; }
+.art-current { top: 1rem; }

@@ -334,3 +334,24 @@ func (c *beetsAPI) AlbumArt(ctx context.Context, id int) (*http.Response, error)
 	}
 	return resp, nil
 }
+
+// SetAlbumArt sends an image (JPEG or PNG bytes) as an Album's art.
+func (c *beetsAPI) SetAlbumArt(ctx context.Context, id int, data []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.base+"/albums/"+strconv.Itoa(id)+"/art", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	if t, ok := imageType(data); ok {
+		req.Header.Set("Content-Type", t)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("beets-api unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		return &apiError{Status: resp.StatusCode, Detail: detailText(body)}
+	}
+	return nil
+}

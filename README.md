@@ -29,6 +29,7 @@ Without devenv: `go generate ./... && go run . -api http://127.0.0.1:8338`.
 | `main.go`       | Flags                                                                  |
 | `server.go`     | Routes and handlers                                                    |
 | `beetsapi.go`   | The beets-api client                                                   |
+| `art.go`        | Album art: searching iTunes and Deezer, fetching an image to Set art   |
 | `query.go`      | Building beets queries: Artist regexes, filters, sorting               |
 | `pages.go`      | The data each page renders, and template helpers                       |
 | `templates.go`  | Rendering and the embedded static assets                               |
@@ -45,3 +46,8 @@ These features need endpoints that beets-api doesn't have yet. Until they exist,
 - Artist list: `GET /artists` (beets-api `.scratch/artists/`)
 - History: `GET /modifications` (beets-api `.scratch/modifications-history/`)
 - Album art: `GET /albums/{id}/art` (beets-api `.scratch/album-art/`)
+- Removing Album art: `DELETE /albums/{id}/art` (beets-api `.scratch/album-art/issues/02-remove-album-art.md`)
+
+## Album art
+
+The Art tab searches the iTunes Search API and the Deezer API (no keys), and fetches images from URLs you enter, so beets-ui needs outbound HTTPS. Set art sends the image to beets-api's `PUT /albums/{id}/art`, which saves it as `cover.jpg` or `cover.png` and deletes the previous art file. When an Album already has art, the UI shows the current and new art side by side first; the fetched image waits in memory for up to an hour.
