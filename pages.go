@@ -399,12 +399,8 @@ func auditValue(v any) string {
 	case nil:
 		return ""
 	case map[string]any, []any:
-		b, _ := json.Marshal(v)
-		s := string(b)
-		if len(s) > 300 {
-			s = s[:300] + "…"
-		}
-		return s
+		b, _ := json.MarshalIndent(v, "", "  ") // whole, however long: the Audit is where to read it
+		return string(b)
 	}
 	return valueString(v)
 }

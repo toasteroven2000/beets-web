@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -16,7 +17,7 @@ func TestAuditListsChanges(t *testing.T) {
 		}})
 	}
 	rec := get(t, h, "/audit?target=album:5&action=album.modify")
-	mustContain(t, rec, `href="/modifications/7"`, `href="/albums/5"`, "<del>1969</del> → <ins>1970</ins>", "<del>/m/cover.jpg</del> → <ins></ins>", "[3]", "beets-ui", `<option value="album.modify" selected>`)
+	mustContain(t, rec, `href="/modifications/7"`, `href="/albums/5"`, "<del>1969</del> → <ins>1970</ins>", "<del>/m/cover.jpg</del> → <ins></ins>", "[\n  3\n]", "beets-ui", `<option value="album.modify" selected>`)
 	r, _ := f.last(t, "GET", "/audit")
 	if q := r.URL.Query(); q.Get("target") != "album:5" || q.Get("action") != "album.modify" {
 		t.Errorf("query %v", q)
@@ -44,4 +45,12 @@ func TestModificationIDsMayBeNumbers(t *testing.T) {
 		}})
 	}
 	mustContain(t, get(t, h, "/modifications"), `href="/modifications/12"`, ">Modifications<")
+}
+
+func TestAuditValueIsNotTruncated(t *testing.T) {
+	long := strings.Repeat("x", 1000)
+	got := auditValue(map[string]any{"a": long})
+	if !strings.Contains(got, long) || !strings.Contains(got, "\n") || strings.Contains(got, "…") {
+		t.Errorf("auditValue cut a long value: %d chars", len(got))
+	}
 }
