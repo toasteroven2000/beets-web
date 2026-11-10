@@ -36,7 +36,7 @@ Without devenv: `go generate ./... && go run . -api http://127.0.0.1:8338`.
 | `templates.go`  | Rendering and the embedded static assets                               |
 | `*.templ`       | HTML views, as [templ](https://templ.guide) components                 |
 | `*_templ.go`    | Generated from the `.templ` files; not committed                       |
-| `static/*`      | Bootstrap 5.3.8, Bootstrap Icons 1.13.1 (CSS and woff2 font) and htmx 2.0.4 (vendored, unmodified), theme switcher, stylesheet |
+| `static/*`      | Bootstrap 5.3.8, Bootstrap Icons 1.13.1 (CSS and woff2 font), the MusicBrainz logo from [dashboard-icons](https://dashboardicons.com/icons/musicbrainz) (Apache-2.0) and htmx 2.0.4 (vendored, unmodified), theme switcher, stylesheet |
 
 The `*_templ.go` files are not committed. Run `go generate ./...` before `go build` or `go test`; CI does the same. Static assets are compiled into the binary.
 

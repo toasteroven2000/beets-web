@@ -265,6 +265,29 @@ func candidateFiles(c candidate) []fileChanges {
 	return c.Tracks
 }
 
+// sourceURL is a Candidate's page at its metadata source, or "".
+func sourceURL(c candidate) string {
+	if c.ID == "" {
+		return ""
+	}
+	switch strings.ToLower(c.DataSource) {
+	case "musicbrainz":
+		if c.Track != nil {
+			return "https://musicbrainz.org/recording/" + url.PathEscape(c.ID)
+		}
+		return "https://musicbrainz.org/release/" + url.PathEscape(c.ID)
+	}
+	return ""
+}
+
+// sourceIconFile is the static file of a metadata source's logo, or "".
+func sourceIconFile(source string) string {
+	if strings.EqualFold(source, "musicbrainz") {
+		return "musicbrainz.svg"
+	}
+	return ""
+}
+
 func baseName(p string) string { return path.Base(p) }
 
 // existingScope tells whether a duplicate prompt's existing records are

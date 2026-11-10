@@ -183,7 +183,7 @@ func TestAlbumPromptShowsCandidatesAndChoices(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, albumPrompt()) }
 	rec := get(t, h, "/imports/7")
-	mustContain(t, rec, "92%", "The Beatles – Abbey Road", "1969", "MusicBrainz", "<details", " open",
+	mustContain(t, rec, "92%", "The Beatles – Abbey Road", "1969", `href="https://musicbrainz.org/release/mb-1"`, "musicbrainz.svg?v=", "<details", " open",
 		"01.mp3", "<del>come together</del> → <ins>Come Together</ins>", "Her Majesty",
 		`name="action" value="apply"`, `name="candidate" value="0"`, `name="prompt_id" value="p1"`,
 		">Use as-is<", ">Import as tracks<", ">Group albums<", ">Skip<", "Search again", `value="Abbey Rd"`, "medium")
@@ -354,5 +354,19 @@ func TestImportWarnsWithoutMetadataSource(t *testing.T) {
 	mustContain(t, rec, "enables no metadata source")
 	if strings.Contains(rec.Body.String(), "No Candidates found") {
 		t.Error("blames the match, not the config")
+	}
+}
+
+func TestSourceURL(t *testing.T) {
+	album := candidate{DataSource: "MusicBrainz", ID: "abc"}
+	track := candidate{DataSource: "MusicBrainz", ID: "def", Track: &fileChanges{}}
+	if u := sourceURL(album); u != "https://musicbrainz.org/release/abc" {
+		t.Error(u)
+	}
+	if u := sourceURL(track); u != "https://musicbrainz.org/recording/def" {
+		t.Error(u)
+	}
+	if u := sourceURL(candidate{DataSource: "Discogs", ID: "1"}); u != "" {
+		t.Error(u)
 	}
 }

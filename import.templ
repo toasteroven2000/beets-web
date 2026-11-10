@@ -332,7 +332,7 @@ templ candidateView(id string, p importPrompt, c candidate, open bool) {
 			if y := valueString(c.Year); y != "" && y != "0" {
 				<span class="text-body-secondary">{ y }</span>
 			}
-			<span class="small text-body-secondary">{ c.DataSource }</span>
+			@sourceLink(c)
 			<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="ms-auto">
 				<input type="hidden" name="prompt_id" value={ p.ID }/>
 				<input type="hidden" name="candidate" value={ strconv.Itoa(c.Index) }/>
@@ -457,4 +457,27 @@ templ noSourcesWarning() {
 		<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
 		beets' config enables no metadata source, so Imports won't find Candidates. Add <code>musicbrainz</code> (or <code>deezer</code>, <code>spotify</code>, <code>discogs</code>) to <code>plugins</code> and restart beets-api.
 	</div>
+}
+
+// sourceLink names where a Candidate came from, linked to its page there when
+// the UI knows the source's URLs, with the source's icon when it has one.
+templ sourceLink(c candidate) {
+	if u := sourceURL(c); u != "" {
+		<a class="small source-link" href={ templ.URL(u) } target="_blank" rel="noopener" title={ "Open on " + c.DataSource }>
+			@sourceIcon(c.DataSource)
+			{ c.DataSource }
+		</a>
+	} else {
+		<span class="small text-body-secondary">
+			@sourceIcon(c.DataSource)
+			{ c.DataSource }
+		</span>
+	}
+}
+
+// sourceIcon is a metadata source's logo, or nothing for sources without one.
+templ sourceIcon(source string) {
+	if f := sourceIconFile(source); f != "" {
+		<img class="source-icon" src={ assetURL(f) } alt="" aria-hidden="true"/>
+	}
 }
