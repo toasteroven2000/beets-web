@@ -44,6 +44,9 @@ templ importStartView(p importStartPage) {
 				beets-api has no Import Paths. Set <code>BEETS_API_IMPORT_PATHS</code> to the directories it may import from.
 			</div>
 		} else {
+			if p.NoSources {
+				@noSourcesWarning()
+			}
 			if p.Mode.Text != "" {
 				<div class={ "alert py-2", templ.KV("alert-warning", p.Mode.Warn), templ.KV("alert-light border", !p.Mode.Warn) }>
 					{ p.Mode.Text } <span class="text-body-secondary small">(beets' <code>import</code> config)</span>
@@ -156,7 +159,7 @@ templ importHistory(p importStartPage) {
 
 // importView follows one Import: it polls while beets works, shows the prompt
 // when beets needs a Choice, and the outcome at the end.
-templ importView(op importOp, stale bool) {
+templ importView(op importOp, stale, noSources bool) {
 	{{ id := string(op.ID) }}
 	@layout("Import "+id, "Import") {
 		<nav aria-label="breadcrumb">
@@ -194,7 +197,7 @@ templ importView(op importOp, stale bool) {
 					</div>
 				case "waiting_for_choice":
 					if pr := op.Result.Prompt; pr != nil {
-						@importPromptView(id, *pr)
+						@importPromptView(id, *pr, noSources)
 					}
 				case "failed":
 					<div class="alert alert-danger">The Import failed: { orDash(op.Result.Error) }</div>
@@ -226,7 +229,7 @@ templ importView(op importOp, stale bool) {
 	}
 }
 
-templ importPromptView(id string, p importPrompt) {
+templ importPromptView(id string, p importPrompt, noSources bool) {
 	<div class="card mb-3">
 		<div class="card-header d-flex flex-wrap align-items-center gap-2">
 			switch p.Kind {
@@ -271,7 +274,11 @@ templ importPromptView(id string, p importPrompt) {
 					}
 				</div>
 			} else if p.Kind != "duplicate" {
-				<p class="text-body-secondary">No Candidates found. Search, or import the files as they are.</p>
+				if noSources {
+					@noSourcesWarning()
+				} else {
+					<p class="text-body-secondary">No Candidates found. Search, or import the files as they are.</p>
+				}
 			}
 			<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="d-flex flex-wrap gap-3 mb-3">
 				<input type="hidden" name="prompt_id" value={ p.ID }/>
@@ -442,4 +449,12 @@ templ importRemoveView(op importOp) {
 			<a class="btn btn-outline-secondary" href={ templ.URL("/imports/" + id) }>Cancel</a>
 		</form>
 	}
+}
+
+// noSourcesWarning explains why an Import finds no Candidates.
+templ noSourcesWarning() {
+	<div class="alert alert-warning">
+		<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+		beets' config enables no metadata source, so Imports won't find Candidates. Add <code>musicbrainz</code> (or <code>deezer</code>, <code>spotify</code>, <code>discogs</code>) to <code>plugins</code> and restart beets-api.
+	</div>
 }

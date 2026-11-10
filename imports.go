@@ -32,6 +32,7 @@ type importStartPage struct {
 	ActiveID      string    // from a 409, when the list is unavailable
 	Error         string
 	NoImportPaths bool // BEETS_API_IMPORT_PATHS is unset or empty
+	NoSources     bool // beets' config enables no metadata source
 }
 
 // Here is the directory being browsed, "" at the Import Paths themselves.
@@ -133,6 +134,36 @@ func importModeFrom(cfg map[string]any) importMode {
 		return importMode{"Files will be linked into the Library; the originals stay where they are.", false}
 	}
 	return importMode{"Files stay where they are: beets adds them to the Library in place.", false}
+}
+
+// metadataSources are the plugins shipped with beets that find Candidates.
+var metadataSources = []string{"musicbrainz", "discogs", "spotify", "deezer", "beatport", "chroma"}
+
+// noMetadataSource tells whether beets' config enables none of them, so an
+// Import can't find Candidates. Setting `plugins` replaces beets' default
+// [musicbrainz], which is easy to do by accident. Unknown config says false.
+func noMetadataSource(cfg map[string]any) bool {
+	var plugins []string
+	switch v := cfg["plugins"].(type) {
+	case []any:
+		for _, p := range v {
+			if s, ok := p.(string); ok {
+				plugins = append(plugins, s)
+			}
+		}
+	case string: // beets also takes a space-separated string
+		plugins = strings.Fields(v)
+	default:
+		return false
+	}
+	for _, p := range plugins {
+		for _, src := range metadataSources {
+			if p == src {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // importActive is a status in which an Import still needs the UI.
@@ -316,6 +347,7 @@ func (s *server) importStartPage(ctx context.Context, tab, dir, status string, o
 		p.NoImportPaths = err == nil && b.Path == nil && len(b.Entries) == 0
 		if cfg, err := s.api.Config(ctx); err == nil {
 			p.Mode = importModeFrom(cfg)
+			p.NoSources = noMetadataSource(cfg)
 		}
 	} else {
 		var statuses []string
@@ -378,7 +410,13 @@ func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	render(w, http.StatusOK, importView(op, r.URL.Query().Get("stale") != ""))
+	noSources := false
+	if pr := op.Result.Prompt; pr != nil && len(pr.Candidates) == 0 && pr.Kind != "duplicate" {
+		if cfg, err := s.api.Config(r.Context()); err == nil {
+			noSources = noMetadataSource(cfg)
+		}
+	}
+	render(w, http.StatusOK, importView(op, r.URL.Query().Get("stale") != "", noSources))
 }
 
 func (s *server) handleImportChoice(w http.ResponseWriter, r *http.Request) {

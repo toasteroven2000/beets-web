@@ -314,3 +314,45 @@ func TestAuditFiltersByImport(t *testing.T) {
 		t.Errorf("query %s", r.URL.RawQuery)
 	}
 }
+
+func TestNoMetadataSource(t *testing.T) {
+	cases := []struct {
+		plugins any
+		want    bool
+	}{
+		{[]any{"info", "web"}, true},
+		{[]any{"musicbrainz", "web"}, false},
+		{"web deezer", false},
+		{"web info", true},
+		{nil, false}, // unknown: don't warn
+	}
+	for _, c := range cases {
+		cfg := map[string]any{}
+		if c.plugins != nil {
+			cfg["plugins"] = c.plugins
+		}
+		if got := noMetadataSource(cfg); got != c.want {
+			t.Errorf("%v: got %v", c.plugins, got)
+		}
+	}
+}
+
+func TestImportWarnsWithoutMetadataSource(t *testing.T) {
+	f, h := newTest(t)
+	importPathsRoute(f)
+	f.routes["GET /config"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"plugins": []string{"info", "web"}})
+	}
+	mustContain(t, get(t, h, "/import"), "enables no metadata source")
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"id": 7, "status": "waiting_for_choice", "request": map[string]any{"paths": []string{"/in/a"}},
+			"result": map[string]any{"prompt": map[string]any{"id": "p1", "kind": "album", "paths": []string{"/in/a"},
+				"choices": []string{"asis", "skip", "search", "abort"}, "current": map[string]any{"artist": "AC/DC", "album": "Back in Black"},
+				"recommendation": "none", "candidates": []any{}}}})
+	}
+	rec := get(t, h, "/imports/7")
+	mustContain(t, rec, "enables no metadata source")
+	if strings.Contains(rec.Body.String(), "No Candidates found") {
+		t.Error("blames the match, not the config")
+	}
+}
