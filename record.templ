@@ -28,6 +28,7 @@ templ recordView(p recordPage) {
 					if y := yearText(p.Record); y != "" {
 						<span>{ " · " + y }</span>
 					}
+					<span>· <a href={ templ.URL(auditURL(p.Scope, p.Record.ID())) }><i class="bi bi-journal-text" aria-hidden="true"></i> Audit</a></span>
 				</div>
 				if p.Scope == items {
 					<div class="small text-body-secondary font-monospace text-break">{ p.Record.Str("path") }</div>
@@ -42,12 +43,18 @@ templ recordView(p recordPage) {
 				<li class="nav-item">
 					<a class={ "nav-link", templ.KV("active", p.Tab == "fields") } href={ templ.URL(recordTabURL(albums, p.Record.ID(), "fields")) }>Fields</a>
 				</li>
+				<li class="nav-item">
+					<a class={ "nav-link", templ.KV("active", p.Tab == "art") } href={ templ.URL(recordTabURL(albums, p.Record.ID(), "art")) }>Art</a>
+				</li>
 			</ul>
 		}
-		if p.Tab == "items" {
-			@recordTable(p.Items)
-		} else {
-			@recordForm(p)
+		switch p.Tab {
+			case "items":
+				@recordTable(p.Items)
+			case "art":
+				@artTab(p)
+			default:
+				@recordForm(p)
 		}
 	}
 }
@@ -74,8 +81,8 @@ templ recordForm(p recordPage) {
 			</div>
 			<span class="small text-body-secondary" data-count></span>
 			<div class="ms-auto d-flex gap-2">
-				<button class="btn btn-sm btn-outline-secondary" type="reset">Reset</button>
-				<button class="btn btn-sm btn-primary">Preview changes</button>
+				<button class="btn btn-sm btn-outline-secondary" type="reset"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Reset</button>
+				<button class="btn btn-sm btn-primary"><i class="bi bi-eye" aria-hidden="true"></i> Preview changes</button>
 			</div>
 		</div>
 		<table class="table table-sm align-middle">
@@ -88,7 +95,7 @@ templ recordForm(p recordPage) {
 						<td class="font-monospace small">
 							<label for={ "f-" + key }>{ key }</label>
 							if isPopular(p.Scope, key) {
-								<span class="text-warning" title="Popular">★</span>
+								<i class="bi bi-star-fill text-warning small" title="Popular" aria-label="Popular"></i>
 							}
 						</td>
 						<td>

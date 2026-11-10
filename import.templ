@@ -1,0 +1,554 @@
+package main
+
+import (
+	"strconv"
+	"strings"
+)
+
+// importStartView browses the Import Paths and starts an Import of one folder.
+templ importStartView(p importStartPage) {
+	@layout("Import", "Import") {
+		@pageHeader("Import", "Bring music from an Import Path into the Library") {
+		}
+		if p.Active != nil {
+			<div class="alert alert-primary d-flex align-items-center gap-2">
+				<span>Import { string(p.Active.ID) } is { statusText(p.Active.Status) }.</span>
+				<a class="alert-link" href={ templ.URL("/imports/" + string(p.Active.ID)) }>Open it</a>
+			</div>
+		}
+		if p.Error != "" {
+			<div class="alert alert-danger">
+				{ p.Error }
+				if p.ActiveID != "" && p.Active == nil {
+					<a class="alert-link" href={ templ.URL("/imports/" + p.ActiveID) }>Open Import { p.ActiveID }</a>
+				}
+			</div>
+		}
+		<ul class="nav nav-tabs mb-3">
+			<li class="nav-item">
+				if p.Tab == "paths" {
+					<a class="nav-link active" aria-current="page" href={ templ.URL(p.PathsURL()) }><i class="bi bi-folder2-open" aria-hidden="true"></i> Import Paths</a>
+				} else {
+					<a class="nav-link" href={ templ.URL(p.PathsURL()) }><i class="bi bi-folder2-open" aria-hidden="true"></i> Import Paths</a>
+				}
+			</li>
+			<li class="nav-item">
+				if p.Tab == "history" {
+					<a class="nav-link active" aria-current="page" href={ templ.URL(p.HistoryURL(0)) }><i class="bi bi-clock-history" aria-hidden="true"></i> History <span class="badge text-bg-secondary">{ strconv.Itoa(p.AllTotal) }</span></a>
+				} else {
+					<a class="nav-link" href={ templ.URL(p.HistoryURL(0)) }><i class="bi bi-clock-history" aria-hidden="true"></i> History <span class="badge text-bg-secondary">{ strconv.Itoa(p.AllTotal) }</span></a>
+				}
+			</li>
+		</ul>
+		if p.Tab == "history" {
+			@importHistory(p)
+		} else if p.NoImportPaths {
+			<div class="alert alert-warning">
+				beets-api has no Import Paths. Set <code>BEETS_API_IMPORT_PATHS</code> to the directories it may import from.
+			</div>
+		} else {
+			if p.NoSources {
+				@noSourcesWarning()
+			}
+			<form method="post" action="/imports">
+				<input type="hidden" name="here" value={ p.Here() }/>
+				<div class="d-flex flex-wrap align-items-center gap-3 py-2 mb-2 border-bottom">
+					if u := p.UpURL(); u != "" {
+						<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(u) }><i class="bi bi-arrow-up" aria-hidden="true"></i> Up</a>
+						<span class="font-monospace small text-break">{ p.Here() }</span>
+					} else {
+						<span class="fw-semibold">Import Paths</span>
+					}
+					<div class="form-check form-switch mb-0 ms-auto">
+						<input class="form-check-input" type="checkbox" role="switch" id="singletons" name="singletons" value="1"/>
+						<label class="form-check-label small" for="singletons">Singletons: import files as Items, not Albums</label>
+					</div>
+					if p.Here() != "" {
+						<button class="btn btn-sm btn-primary" name="path" value={ p.Here() }><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Import this folder</button>
+					}
+				</div>
+				if len(p.Browse.Entries) == 0 {
+					<p class="text-body-secondary">This folder is empty.</p>
+				} else {
+					<table class="table table-sm table-hover align-middle">
+						<thead>
+							<tr><th>Name</th><th class="text-end">Size</th><th>Modified</th><th></th></tr>
+						</thead>
+						<tbody>
+							for _, e := range p.Browse.Entries {
+								<tr>
+									if e.Type == "dir" {
+										<td><i class="bi bi-folder" aria-hidden="true"></i> <a href={ templ.URL(importBrowseURL(e.Path)) }>{ e.Name }</a></td>
+										<td></td>
+										<td class="small text-body-secondary text-nowrap">{ shortTime(e.MTime) }</td>
+										<td class="text-end"><button class="btn btn-sm btn-outline-primary" name="path" value={ e.Path }><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Import</button></td>
+									} else {
+										<td class="text-body-secondary"><i class="bi bi-file-earmark" aria-hidden="true"></i> { e.Name }</td>
+										<td class="small text-end text-nowrap">{ sizeText(e.Size) }</td>
+										<td class="small text-body-secondary text-nowrap">{ shortTime(e.MTime) }</td>
+										<td></td>
+									}
+								</tr>
+							}
+						</tbody>
+					</table>
+				}
+			</form>
+		}
+	}
+}
+
+// importHistory lists past Imports, newest first.
+templ importHistory(p importStartPage) {
+	<form method="get" action="/import" class="d-flex flex-wrap gap-2 align-items-end mb-3">
+		<input type="hidden" name="tab" value="history"/>
+		<div>
+			<label class="form-label small mb-1" for="import-status">Status</label>
+			<select class="form-select form-select-sm" id="import-status" name="status">
+				<option value="">Any</option>
+				for _, s := range importStatuses {
+					<option value={ s } selected?={ s == p.Status }>{ statusText(s) }</option>
+				}
+			</select>
+		</div>
+		<button class="btn btn-sm btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i> Filter</button>
+		if p.Status != "" {
+			<a class="btn btn-sm btn-outline-secondary" href="/import?tab=history">Clear</a>
+		}
+	</form>
+	if len(p.Imports) == 0 {
+		if p.Status != "" {
+			<p class="text-body-secondary">No { statusText(p.Status) } Imports.</p>
+		} else {
+			<p class="text-body-secondary">No Imports yet.</p>
+		}
+	} else {
+		<table class="table table-sm align-middle">
+			<thead>
+				<tr><th>Import</th><th>Status</th><th>Paths</th><th>Result</th><th>Started</th></tr>
+			</thead>
+			<tbody>
+				for _, op := range p.Imports {
+					<tr>
+						<td><a href={ templ.URL("/imports/" + string(op.ID)) }>{ string(op.ID) }</a></td>
+						<td><span class={ "badge", importStatusClass(op.Status) }>{ statusText(op.Status) }</span></td>
+						<td class="font-monospace small text-break">
+							for _, path := range op.Request.Paths {
+								<div>{ path }</div>
+							}
+						</td>
+						<td class="small">{ countsText(op) }</td>
+						<td class="small text-nowrap">{ shortTime(op.CreatedAt) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		<div class="d-flex gap-2 align-items-center">
+			if p.Offset > 0 {
+				<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.HistoryURL(max(0, p.Offset-importsPerPage))) }><i class="bi bi-chevron-left" aria-hidden="true"></i> Newer</a>
+			}
+			if p.Offset+len(p.Imports) < p.Total {
+				<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.HistoryURL(p.Offset+importsPerPage)) }>Older <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+			}
+			<span class="small text-body-secondary">{ plural(p.Total, "Import", "Imports") }</span>
+		</div>
+	}
+}
+
+// importView follows one Import: it polls while beets works, shows the prompt
+// when beets needs a Choice, and the outcome at the end.
+templ importView(op importOp, stale, noSources bool, mode importMode) {
+	{{ id := string(op.ID) }}
+	@layout("Import "+id, "Import") {
+		<nav aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href="/import">Import</a></li>
+				<li class="breadcrumb-item active" aria-current="page">Import { id }</li>
+			</ol>
+		</nav>
+		<div id="import" if op.Status == "running" { hx-get={ "/imports/" + id } hx-trigger="every 1s" hx-select="#import" hx-swap="outerHTML" }>
+			<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+				<h1 class="h3 mb-0">Import { id }</h1>
+				<span class={ "badge", importStatusClass(op.Status) }>{ statusText(op.Status) }</span>
+				if op.Request.Singletons {
+					<span class="badge text-bg-light border">singletons</span>
+				}
+				if importActive(op.Status) {
+					<form method="post" action={ templ.SafeURL("/imports/" + id + "/abort") } class="ms-auto">
+						<button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle" aria-hidden="true"></i> Abort Import</button>
+					</form>
+				}
+			</div>
+			<div class="font-monospace small text-break text-body-secondary mb-3">
+				for _, path := range op.Request.Paths {
+					<div>{ path }</div>
+				}
+			</div>
+			if stale {
+				<div class="alert alert-info py-2">That prompt had already moved on; this is where the Import is now.</div>
+			}
+			switch op.Status {
+				case "running":
+					<div class="d-flex align-items-center gap-2 text-body-secondary mb-3">
+						<div class="spinner-border spinner-border-sm" role="status"></div>
+						beets is working…
+					</div>
+				case "waiting_for_choice":
+					if pr := op.Result.Prompt; pr != nil {
+						@importPromptView(id, *pr, noSources, mode)
+					}
+				case "failed":
+					<div class="alert alert-danger">The Import failed: { orDash(op.Result.Error) }</div>
+				case "aborted":
+					<div class="alert alert-secondary">The Import was aborted. Import Tasks finished before that stay in the Library.</div>
+			}
+			if len(op.Result.Outcomes) > 0 {
+				@importOutcomes(op)
+			}
+			if len(op.Result.Choices) > 0 {
+				<h2 class="h6 mt-4">Choices</h2>
+				<ol class="small">
+					for _, c := range op.Result.Choices {
+						<li>
+							{ choiceText(c) }
+							<span class="font-monospace text-body-secondary text-break">
+								for i, path := range c.Paths {
+									if i > 0 {
+										,
+									}
+									{ baseName(path) }
+								}
+							</span>
+						</li>
+					}
+				</ol>
+			}
+		</div>
+	}
+}
+
+templ importPromptView(id string, p importPrompt, noSources bool, mode importMode) {
+	<p class="mb-1">
+		switch p.Kind {
+			case "duplicate":
+				<strong>Already in the Library.</strong>
+			case "item":
+				<strong>Match this Item.</strong>
+			default:
+				<strong>Match this Album.</strong>
+		}
+		if len(p.Current) > 0 {
+			<span class="text-body-secondary">Tagged now as</span>
+			if p.Kind == "item" {
+				{ orDash(p.Current["artist"]) } – { orDash(p.Current["title"]) }
+			} else {
+				{ orDash(p.Current["artist"]) } – { orDash(p.Current["album"]) }
+			}
+		}
+		if p.Recommendation != "" {
+			<span class="badge text-bg-light border ms-1">beets' confidence: { p.Recommendation }</span>
+		}
+	</p>
+	if len(p.Candidates) > 1 {
+		<p class="small text-body-secondary mb-3">{ strconv.Itoa(len(p.Candidates)) } Candidates, best first.</p>
+	}
+	if p.Kind == "duplicate" {
+		<ul class="mb-3">
+			for _, r := range p.Existing {
+				<li><a href={ templ.URL(recordURL(existingScope(p), r.ID())) }>{ existingName(r) }</a></li>
+			}
+		</ul>
+	}
+	for i, c := range p.Candidates {
+		@candidateCard(id, p, c, i == 0, mode)
+	}
+	if len(p.Candidates) == 0 && p.Kind != "duplicate" {
+		if noSources {
+			@noSourcesWarning()
+		} else {
+			<p class="text-body-secondary">No Candidates found. Search, or import the files as they are.</p>
+		}
+	}
+	<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="d-flex flex-wrap align-items-center gap-2 mb-3">
+		<input type="hidden" name="prompt_id" value={ p.ID }/>
+		if len(p.Candidates) > 0 {
+			<span class="small text-body-secondary">Or:</span>
+		}
+		for _, c := range promptButtons(p) {
+			<button class={ "btn btn-sm", templ.KV("btn-outline-danger", c == "remove"), templ.KV("btn-outline-secondary", c != "remove") } name="action" value={ c } title={ choiceHelp(c) }>{ choiceLabel(c) }</button>
+		}
+	</form>
+	if p.Kind == "duplicate" {
+		<ul class="small text-body-secondary">
+			for _, c := range promptButtons(p) {
+				<li><strong>{ choiceLabel(c) }:</strong> { choiceHelp(c) }</li>
+			}
+		</ul>
+	}
+	if hasChoice(p, "search") {
+		<details open?={ len(p.Candidates) == 0 }>
+			<summary class="small"><i class="bi bi-search" aria-hidden="true"></i> Search again</summary>
+			<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="row g-2 align-items-end mt-1">
+				<input type="hidden" name="prompt_id" value={ p.ID }/>
+				<input type="hidden" name="action" value="search"/>
+				<div class="col-sm-3">
+					<label class="form-label small mb-1" for="search-artist">Artist</label>
+					<input class="form-control form-control-sm" id="search-artist" name="artist" value={ p.Current["artist"] }/>
+				</div>
+				<div class="col-sm-3">
+					if p.Kind == "item" {
+						<label class="form-label small mb-1" for="search-name">Title</label>
+						<input class="form-control form-control-sm" id="search-name" name="name" value={ p.Current["title"] }/>
+					} else {
+						<label class="form-label small mb-1" for="search-name">Album</label>
+						<input class="form-control form-control-sm" id="search-name" name="name" value={ p.Current["album"] }/>
+					}
+				</div>
+				<div class="col-sm-3">
+					<label class="form-label small mb-1" for="search-ids">or ids</label>
+					<input class="form-control form-control-sm font-monospace" id="search-ids" name="search_ids" placeholder="MusicBrainz or other ids"/>
+				</div>
+				<div class="col-auto">
+					<button class="btn btn-sm btn-outline-primary"><i class="bi bi-search" aria-hidden="true"></i> Search again</button>
+				</div>
+			</form>
+		</details>
+	}
+}
+
+// candidateCard shows one Candidate as the files would be once applied: every
+// album property and every track, with old → new only where Apply changes it.
+// The best Candidate says what happens to the files beside its Apply button.
+templ candidateCard(id string, p importPrompt, c candidate, best bool, mode importMode) {
+	{{ facts := candidateFacts(c) }}
+	<div class={ "card mb-3 candidate", templ.KV("border-primary", best) }>
+		<div class="card-body">
+			<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+				<span class={ "badge", matchClass(c) }>{ matchPercent(c) }</span>
+				<h2 class="h5 mb-0">{ candidateName(c) }</h2>
+				if y := valueString(c.Year); y != "" && y != "0" {
+					<span class="text-body-secondary">{ y }</span>
+				}
+				@sourceLink(c)
+				<div class="ms-auto d-flex flex-wrap align-items-center justify-content-end gap-2">
+					if best && mode.Text != "" {
+						<span class={ "small", templ.KV("text-warning-emphasis", mode.Warn), templ.KV("text-body-secondary", !mode.Warn) } title="beets' import config">
+							<i class="bi bi-files" aria-hidden="true"></i>
+							{ mode.Text }
+						</span>
+					}
+					<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") }>
+						<input type="hidden" name="prompt_id" value={ p.ID }/>
+						<input type="hidden" name="candidate" value={ strconv.Itoa(c.Index) }/>
+						<button class={ "btn btn-sm", templ.KV("btn-primary", best), templ.KV("btn-outline-primary", !best) } name="action" value="apply"><i class="bi bi-check-lg" aria-hidden="true"></i> Apply</button>
+					</form>
+				</div>
+			</div>
+			if !hasFields(c) {
+				<p class="small text-body-secondary">
+					<i class="bi bi-info-circle" aria-hidden="true"></i>
+					This prompt came from an older beets-api that only sent what Apply changes, so values that stay the same aren't shown. Search again to refresh it.
+				</p>
+			}
+			<div class="small text-body-secondary mb-1">
+				if n := changedFacts(facts); n > 0 {
+					{ c.DataSource } · { strconv.Itoa(n) } of { strconv.Itoa(len(facts)) } change
+				} else {
+					{ c.DataSource } · no changes
+				}
+			</div>
+			<table class="table table-sm table-borderless w-auto mb-0 delta-table">
+				<tbody>
+					for _, f := range facts {
+						<tr class={ templ.KV("changed", f.Changed) }>
+							<th class="fw-normal text-body-secondary pe-4">{ f.Label }</th>
+							<td>
+								if f.Changed {
+									@delta(f.Old, f.New)
+								} else {
+									{ f.New }
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+			if c.Track == nil {
+				{{ discs := candidateDiscs(c) }}
+				<div class="row g-3 mt-1">
+					for _, d := range discs {
+						<div class={ "col-lg-6" }>
+							<div class="small text-body-secondary mb-1">{ d.Label(len(discs) > 1) }</div>
+							<table class="table table-sm table-borderless mb-0 small delta-table track-table">
+								<tbody>
+									for _, r := range d.Rows {
+										<tr class={ templ.KV("changed", r.Changed()) }>
+											<td class="text-body-secondary font-monospace text-end pe-2 track-num">{ orDash(r.NewNum) }</td>
+											<td>
+												if r.TitleChanged {
+													@delta(r.OldTitle, r.NewTitle)
+												} else {
+													{ r.Title() }
+												}
+												if r.NumChanged && r.OldNum != "" {
+													<span class="text-body-secondary">(was track { r.OldNum })</span>
+												}
+											</td>
+											<td class="text-body-secondary text-end ps-2 track-length">{ r.Length }</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					}
+				</div>
+			}
+			if len(c.ExtraItems) > 0 {
+				<div class="small text-warning-emphasis">
+					<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+					{ strconv.Itoa(len(c.ExtraItems)) } files don't match a track:
+					for _, path := range c.ExtraItems {
+						<span class="font-monospace">{ baseName(path) }</span>
+					}
+				</div>
+			}
+			if len(c.ExtraTracks) > 0 {
+				<div class="small text-warning-emphasis">
+					<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+					{ strconv.Itoa(len(c.ExtraTracks)) } tracks have no file:
+					for i, t := range c.ExtraTracks {
+						if i > 0 {
+							·
+						}
+						{ valueString(t) }
+					}
+				</div>
+			}
+			if other := otherChanges(c); len(other) > 0 {
+				<details class="mt-2">
+					<summary class="small text-body-secondary">{ strconv.Itoa(len(other)) } more fields Apply also sets ({ strings.Join(other, ", ") })</summary>
+					<table class="table table-sm preview-table mt-2 mb-0">
+						<tbody>
+							for _, f := range candidateFiles(c) {
+								<tr>
+									<td class="small font-monospace text-break field-col">{ baseName(f.Path) }</td>
+									<td class="small">
+										for _, k := range otherChangesOf(f) {
+											<div class="text-break">
+												<code>{ k }</code> <del>{ valueString(f.Changes[k].Old) }</del> → <ins>{ valueString(f.Changes[k].New) }</ins>
+											</div>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</details>
+			}
+		</div>
+	</div>
+}
+
+templ importOutcomes(op importOp) {
+	<h2 class="h6 mt-4">Import Tasks</h2>
+	<table class="table table-sm align-middle">
+		<thead>
+			<tr><th>Files</th><th>Outcome</th></tr>
+		</thead>
+		<tbody>
+			for _, o := range op.Result.Outcomes {
+				<tr>
+					<td class="font-monospace small text-break">
+						for _, path := range o.Paths {
+							<div>{ path }</div>
+						}
+					</td>
+					<td class="small">
+						if o.Skipped {
+							<span class="text-body-secondary">Skipped</span>
+						} else if len(o.Items) == 0 {
+							<span class="text-body-secondary">Nothing imported</span>
+						} else if a := outcomeAlbum(o); a > 0 {
+							<a href={ templ.URL(recordURL(albums, a)) }>Album { strconv.Itoa(a) }</a>
+							· { strconv.Itoa(len(o.Items)) } Items
+						} else {
+							for i, it := range o.Items {
+								if i > 0 {
+									·
+								}
+								<a href={ templ.URL(recordURL(items, it.ID())) }>Item { strconv.Itoa(it.ID()) }</a>
+							}
+						}
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+	<a class="small" href={ templ.URL(importAuditURL(op)) }><i class="bi bi-journal-text" aria-hidden="true"></i> What this Import changed, in the Audit</a>
+}
+
+// importRemoveView asks before "Remove old", which deletes files.
+templ importRemoveView(op importOp) {
+	{{ id := string(op.ID) }}
+	{{ p := *op.Result.Prompt }}
+	@layout("Remove old · Import "+id, "Import") {
+		<nav aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href="/import">Import</a></li>
+				<li class="breadcrumb-item"><a href={ templ.URL("/imports/" + id) }>Import { id }</a></li>
+				<li class="breadcrumb-item active" aria-current="page">Remove old</li>
+			</ol>
+		</nav>
+		@pageHeader("Remove these from the Library?", "beets removes them and deletes their files, then imports the new files. Nothing archives the old files.") {
+		}
+		<ul>
+			for _, r := range p.Existing {
+				<li><a href={ templ.URL(recordURL(existingScope(p), r.ID())) }>{ existingName(r) }</a></li>
+			}
+		</ul>
+		<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="d-flex gap-2">
+			<input type="hidden" name="prompt_id" value={ p.ID }/>
+			<input type="hidden" name="confirm" value="1"/>
+			<button class="btn btn-danger" name="action" value="remove"><i class="bi bi-trash" aria-hidden="true"></i> Remove old and import</button>
+			<a class="btn btn-outline-secondary" href={ templ.URL("/imports/" + id) }>Cancel</a>
+		</form>
+	}
+}
+
+// noSourcesWarning explains why an Import finds no Candidates.
+templ noSourcesWarning() {
+	<div class="alert alert-warning">
+		<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+		beets' config enables no metadata source, so Imports won't find Candidates. Add <code>musicbrainz</code> (or <code>deezer</code>, <code>spotify</code>, <code>discogs</code>) to <code>plugins</code> and restart beets-api.
+	</div>
+}
+
+// sourceLink names where a Candidate came from, linked to its page there when
+// the UI knows the source's URLs, with the source's icon when it has one.
+templ sourceLink(c candidate) {
+	if u := sourceURL(c); u != "" {
+		<a class="small source-link" href={ templ.URL(u) } target="_blank" rel="noopener" title={ "Open on " + c.DataSource }>
+			@sourceIcon(c.DataSource)
+			{ c.DataSource }
+		</a>
+	} else {
+		<span class="small text-body-secondary">
+			@sourceIcon(c.DataSource)
+			{ c.DataSource }
+		</span>
+	}
+}
+
+// sourceIcon is a metadata source's logo, or nothing for sources without one.
+templ sourceIcon(source string) {
+	if f := sourceIconFile(source); f != "" {
+		<img class="source-icon" src={ assetURL(f) } alt="" aria-hidden="true"/>
+	}
+}
+
+// delta is a value that Apply changes: what it is now, then what it becomes.
+templ delta(old, new string) {
+	<del>{ old }</del>
+	<i class="bi bi-arrow-right text-body-secondary" aria-hidden="true"></i>
+	<ins>{ new }</ins>
+}

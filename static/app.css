@@ -14,3 +14,23 @@
 .field-filter { max-width: 16rem; }
 .field-col { width: 30%; }
 .delete-col { width: 4rem; }
+.art-none { aspect-ratio: 1; }
+.art-compare { max-height: 60vh; }
+/* htmx's own indicator styles are off (layout.templ), so: */
+.htmx-indicator { display: none; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: block; }
+.art-current { top: 1rem; }
+.art-remove { max-width: 24rem; }
+.audit-table del { color: var(--bs-danger-text-emphasis); }
+.audit-table ins { color: var(--bs-success-text-emphasis); text-decoration: none; }
+.audit-table del:empty::before, .audit-table ins:empty::before { content: "(empty)"; font-style: italic; opacity: .6; }
+.candidate > summary { cursor: pointer; }
+.choice { max-width: 14rem; }
+.source-icon { height: 1em; width: auto; vertical-align: -.125em; }
+.delta-table del { color: var(--bs-danger-text-emphasis); }
+.delta-table ins { color: var(--bs-success-text-emphasis); text-decoration: none; }
+.delta-table del:empty::before, .delta-table ins:empty::before { content: "(empty)"; font-style: italic; opacity: .6; }
+.delta-table tr.changed > * { background: var(--bs-warning-bg-subtle); }
+.delta-table td, .delta-table th { padding-top: .1rem; padding-bottom: .1rem; }
+.track-num { width: 2.5rem; }
+.track-length { width: 3.5rem; }

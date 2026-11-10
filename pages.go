@@ -3,6 +3,7 @@ package main
 // The data each page renders, and small helpers the templates share.
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"slices"
@@ -55,18 +56,44 @@ type searchPage struct {
 
 type recordPage struct {
 	Scope      scope
-	Tab        string // an Album page's tab: "items" or "fields"
+	Tab        string // an Album page's tab: "items", "fields" or "art"
 	Record     record
 	Album      record    // an Item's Album, if it has one
 	Items      tableData // an Album's Items
 	Separators []string
+
+	// The Art tab.
+	Art       artInfo
+	ArtQuery  string // the search, prefilled with albumartist and album
+	ArtPane   string // the open way to Set art: "search", "url" or "file"
+	ArtURL    string // the URL last entered, kept when it fails
+	ArtError  string
+	ArtNotice string
+}
+
+// artInfo is an Album's current art.
+type artInfo struct {
+	Exists        bool
+	Width, Height int
+}
+
+func (a artInfo) Dims() string { return dimsText(a.Width, a.Height) }
+
+// artComparePage shows an Album's current art beside the image that would
+// replace it.
+type artComparePage struct {
+	Album   record
+	Token   string
+	Current artInfo
+	New     artInfo
+	Source  string
 }
 
 // recordTabURL links to a tab of an Album page.
 func recordTabURL(k scope, id int, tab string) string {
 	u := recordURL(k, id)
-	if tab == "fields" {
-		u += "?tab=fields"
+	if tab != "" && tab != "items" {
+		u += "?tab=" + tab
 	}
 	return u
 }
@@ -78,7 +105,7 @@ type modifyPage struct {
 	Back  string
 }
 
-type historyPage struct {
+type modificationsPage struct {
 	Mods        []modSummary
 	Total       int
 	Offset      int
@@ -261,3 +288,130 @@ func listURL(k scope, f filters, recent bool) string {
 }
 
 func pathText(v any) string { return valueString(v) }
+
+type auditPage struct {
+	Entries     []auditEntry
+	Total       int
+	Offset      int
+	Target      string // e.g. album:5
+	Action      string
+	Operation   int  // a Modification's or Import's id, 0 for any
+	Unavailable bool // beets-api has no GET /audit yet
+}
+
+// OperationName names the Modification or Import the page is filtered to.
+// They share ids, so the kind comes from the entries' actions.
+func (p auditPage) OperationName() string {
+	for _, e := range p.Entries {
+		if strings.HasSuffix(e.Action, ".modify") {
+			return "Modification " + strconv.Itoa(p.Operation)
+		}
+		return "Import " + strconv.Itoa(p.Operation)
+	}
+	return "operation " + strconv.Itoa(p.Operation)
+}
+
+// operationURL links an Audit entry to the Modification or Import behind it.
+func operationURL(e auditEntry) string {
+	if e.OperationID == nil {
+		return ""
+	}
+	if strings.HasSuffix(e.Action, ".modify") {
+		return "/modifications/" + strconv.Itoa(*e.OperationID)
+	}
+	return "/imports/" + strconv.Itoa(*e.OperationID)
+}
+
+// auditActions are the actions beets-api records, for the filter.
+var auditActions = []string{"album.modify", "item.modify", "album.import", "item.import", "album.remove", "item.remove", "art.upload", "art.remove"}
+
+func (p auditPage) URL(offset int) string {
+	v := url.Values{}
+	if p.Target != "" {
+		v.Set("target", p.Target)
+	}
+	if p.Action != "" {
+		v.Set("action", p.Action)
+	}
+	if p.Operation > 0 {
+		v.Set("operation", strconv.Itoa(p.Operation))
+	}
+	if offset > 0 {
+		v.Set("offset", strconv.Itoa(offset))
+	}
+	if len(v) == 0 {
+		return "/audit"
+	}
+	return "/audit?" + v.Encode()
+}
+
+// auditURL lists a record's Audit entries.
+func auditURL(k scope, id int) string {
+	return "/audit?" + url.Values{"target": {auditTarget(k, id)}}.Encode()
+}
+
+func auditTarget(k scope, id int) string { return k.API() + ":" + strconv.Itoa(id) }
+
+// targetURL links an Audit target ("album:5") to its record page.
+func targetURL(target string) string {
+	model, id, ok := strings.Cut(target, ":")
+	n, err := strconv.Atoi(id)
+	if !ok || err != nil {
+		return ""
+	}
+	switch model {
+	case "album":
+		return recordURL(albums, n)
+	case "item":
+		return recordURL(items, n)
+	}
+	return ""
+}
+
+// auditChange is one key of an Audit entry's changes: an old → new pair, or
+// any other value as text.
+type auditChange struct {
+	Key      string
+	Pair     bool
+	Old, New string
+	Text     string
+}
+
+func auditChanges(changes map[string]any) []auditChange {
+	var out []auditChange
+	for _, k := range sortedKeys(changes) {
+		v := changes[k]
+		if m, ok := v.(map[string]any); ok && len(m) == 2 {
+			o, hasOld := m["old"]
+			n, hasNew := m["new"]
+			if hasOld && hasNew {
+				out = append(out, auditChange{Key: k, Pair: true, Old: auditValue(o), New: auditValue(n)})
+				continue
+			}
+		}
+		out = append(out, auditChange{Key: k, Text: auditValue(v)})
+	}
+	return out
+}
+
+func auditValue(v any) string {
+	switch v.(type) {
+	case nil:
+		return ""
+	case map[string]any, []any:
+		b, _ := json.Marshal(v)
+		s := string(b)
+		if len(s) > 300 {
+			s = s[:300] + "…"
+		}
+		return s
+	}
+	return valueString(v)
+}
+
+func firstAction(entries []auditEntry) string {
+	if len(entries) == 0 {
+		return ""
+	}
+	return entries[0].Action
+}

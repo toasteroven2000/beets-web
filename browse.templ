@@ -161,7 +161,7 @@ templ filterForm(p listPage) {
 			</div>
 		</div>
 		<div class="d-flex flex-wrap align-items-center gap-2 mt-3">
-			<button class="btn btn-primary">Search</button>
+			<button class="btn btn-primary"><i class="bi bi-search" aria-hidden="true"></i> Search</button>
 			<a class="btn btn-outline-secondary" href={ templ.URL("/" + string(p.Scope)) }>Clear</a>
 			if p.Filters.Active() {
 				<span class="small text-body-secondary">Query:</span>
@@ -188,7 +188,7 @@ templ searchView(p searchPage) {
 		<form method="get" action="/search" class="mb-3">
 			<div class="input-group">
 				<input class="form-control font-monospace" name="q" value={ p.Query } placeholder="beets query, e.g. love year:1960..1969" aria-label="beets query" autofocus/>
-				<button class="btn btn-primary">Search</button>
+				<button class="btn btn-primary"><i class="bi bi-search" aria-hidden="true"></i> Search</button>
 			</div>
 		</form>
 		if p.Error != "" {
@@ -218,8 +218,8 @@ templ recordTable(t tableData) {
 		<form method="get" action="/modify" class="record-table">
 			<input type="hidden" name="scope" value={ string(t.Scope) }/>
 			<div class="d-flex flex-wrap gap-2 mb-2">
-				<button class="btn btn-sm btn-outline-primary" type="submit">Modify selected</button>
-				<a class="btn btn-sm btn-outline-primary" href={ templ.URL(t.ModifyAllURL()) }>Modify all { count(t.Total, t.Scope) }</a>
+				<button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-pencil" aria-hidden="true"></i> Modify selected</button>
+				<a class="btn btn-sm btn-outline-primary" href={ templ.URL(t.ModifyAllURL()) }><i class="bi bi-pencil" aria-hidden="true"></i> Modify all { count(t.Total, t.Scope) }</a>
 			</div>
 			<div class="table-responsive">
 				<table class="table table-sm table-hover align-middle">
