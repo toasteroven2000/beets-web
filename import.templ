@@ -1,6 +1,9 @@
 package main
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
 // importStartView browses the Import Paths and starts an Import of one folder.
 templ importStartView(p importStartPage) {
@@ -230,140 +233,183 @@ templ importView(op importOp, stale, noSources bool) {
 }
 
 templ importPromptView(id string, p importPrompt, noSources bool) {
-	<div class="card mb-3">
-		<div class="card-header d-flex flex-wrap align-items-center gap-2">
-			switch p.Kind {
-				case "duplicate":
-					<strong>Already in the Library</strong>
-				case "item":
-					<strong>Match this Item</strong>
-				default:
-					<strong>Match this Album</strong>
+	<p class="mb-1">
+		switch p.Kind {
+			case "duplicate":
+				<strong>Already in the Library.</strong>
+			case "item":
+				<strong>Match this Item.</strong>
+			default:
+				<strong>Match this Album.</strong>
+		}
+		if len(p.Current) > 0 {
+			<span class="text-body-secondary">Tagged now as</span>
+			if p.Kind == "item" {
+				{ orDash(p.Current["artist"]) } – { orDash(p.Current["title"]) }
+			} else {
+				{ orDash(p.Current["artist"]) } – { orDash(p.Current["album"]) }
 			}
-			if p.Recommendation != "" {
-				<span class="badge text-bg-light border">beets' confidence: { p.Recommendation }</span>
+		}
+		if p.Recommendation != "" {
+			<span class="badge text-bg-light border ms-1">beets' confidence: { p.Recommendation }</span>
+		}
+	</p>
+	if len(p.Candidates) > 1 {
+		<p class="small text-body-secondary mb-3">{ strconv.Itoa(len(p.Candidates)) } Candidates, best first.</p>
+	}
+	if p.Kind == "duplicate" {
+		<ul class="mb-3">
+			for _, r := range p.Existing {
+				<li><a href={ templ.URL(recordURL(existingScope(p), r.ID())) }>{ existingName(r) }</a></li>
 			}
-		</div>
-		<div class="card-body">
-			<div class="font-monospace small text-break mb-2">
-				for _, path := range p.Paths {
-					<div>{ path }</div>
-				}
-			</div>
-			if len(p.Current) > 0 {
-				<p class="mb-3">
-					<span class="text-body-secondary">Tagged now as</span>
+		</ul>
+	}
+	for i, c := range p.Candidates {
+		@candidateCard(id, p, c, i == 0)
+	}
+	if len(p.Candidates) == 0 && p.Kind != "duplicate" {
+		if noSources {
+			@noSourcesWarning()
+		} else {
+			<p class="text-body-secondary">No Candidates found. Search, or import the files as they are.</p>
+		}
+	}
+	<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="d-flex flex-wrap align-items-center gap-2 mb-3">
+		<input type="hidden" name="prompt_id" value={ p.ID }/>
+		if len(p.Candidates) > 0 {
+			<span class="small text-body-secondary">Or:</span>
+		}
+		for _, c := range promptButtons(p) {
+			<button class={ "btn btn-sm", templ.KV("btn-outline-danger", c == "remove"), templ.KV("btn-outline-secondary", c != "remove") } name="action" value={ c } title={ choiceHelp(c) }>{ choiceLabel(c) }</button>
+		}
+	</form>
+	if p.Kind == "duplicate" {
+		<ul class="small text-body-secondary">
+			for _, c := range promptButtons(p) {
+				<li><strong>{ choiceLabel(c) }:</strong> { choiceHelp(c) }</li>
+			}
+		</ul>
+	}
+	if hasChoice(p, "search") {
+		<details open?={ len(p.Candidates) == 0 }>
+			<summary class="small"><i class="bi bi-search" aria-hidden="true"></i> Search again</summary>
+			<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="row g-2 align-items-end mt-1">
+				<input type="hidden" name="prompt_id" value={ p.ID }/>
+				<input type="hidden" name="action" value="search"/>
+				<div class="col-sm-3">
+					<label class="form-label small mb-1" for="search-artist">Artist</label>
+					<input class="form-control form-control-sm" id="search-artist" name="artist" value={ p.Current["artist"] }/>
+				</div>
+				<div class="col-sm-3">
 					if p.Kind == "item" {
-						{ orDash(p.Current["artist"]) } – { orDash(p.Current["title"]) }
+						<label class="form-label small mb-1" for="search-name">Title</label>
+						<input class="form-control form-control-sm" id="search-name" name="name" value={ p.Current["title"] }/>
 					} else {
-						{ orDash(p.Current["artist"]) } – { orDash(p.Current["album"]) }
-					}
-				</p>
-			}
-			if p.Kind == "duplicate" {
-				<ul class="mb-3">
-					for _, r := range p.Existing {
-						<li><a href={ templ.URL(recordURL(existingScope(p), r.ID())) }>{ existingName(r) }</a></li>
-					}
-				</ul>
-			}
-			if len(p.Candidates) > 0 {
-				<div class="mb-3">
-					for i, c := range p.Candidates {
-						@candidateView(id, p, c, i == 0)
+						<label class="form-label small mb-1" for="search-name">Album</label>
+						<input class="form-control form-control-sm" id="search-name" name="name" value={ p.Current["album"] }/>
 					}
 				</div>
-			} else if p.Kind != "duplicate" {
-				if noSources {
-					@noSourcesWarning()
-				} else {
-					<p class="text-body-secondary">No Candidates found. Search, or import the files as they are.</p>
-				}
-			}
-			<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="d-flex flex-wrap gap-3 mb-3">
-				<input type="hidden" name="prompt_id" value={ p.ID }/>
-				for _, c := range promptButtons(p) {
-					<div class="choice">
-						<button class={ "btn btn-sm", templ.KV("btn-outline-danger", c == "remove"), templ.KV("btn-outline-secondary", c != "remove") } name="action" value={ c }>{ choiceLabel(c) }</button>
-						<div class="small text-body-secondary">{ choiceHelp(c) }</div>
-					</div>
-				}
+				<div class="col-sm-3">
+					<label class="form-label small mb-1" for="search-ids">or ids</label>
+					<input class="form-control form-control-sm font-monospace" id="search-ids" name="search_ids" placeholder="MusicBrainz or other ids"/>
+				</div>
+				<div class="col-auto">
+					<button class="btn btn-sm btn-outline-primary"><i class="bi bi-search" aria-hidden="true"></i> Search again</button>
+				</div>
 			</form>
-			if hasChoice(p, "search") {
-				<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="row g-2 align-items-end">
-					<input type="hidden" name="prompt_id" value={ p.ID }/>
-					<input type="hidden" name="action" value="search"/>
-					<div class="col-sm-3">
-						<label class="form-label small mb-1" for="search-artist">Artist</label>
-						<input class="form-control form-control-sm" id="search-artist" name="artist" value={ p.Current["artist"] }/>
-					</div>
-					<div class="col-sm-3">
-						<label class="form-label small mb-1" for="search-name">
-							if p.Kind == "item" {
-								Title
-							} else {
-								Album
-							}
-						</label>
-						if p.Kind == "item" {
-							<input class="form-control form-control-sm" id="search-name" name="name" value={ p.Current["title"] }/>
-						} else {
-							<input class="form-control form-control-sm" id="search-name" name="name" value={ p.Current["album"] }/>
-						}
-					</div>
-					<div class="col-sm-3">
-						<label class="form-label small mb-1" for="search-ids">or ids</label>
-						<input class="form-control form-control-sm font-monospace" id="search-ids" name="search_ids" placeholder="MusicBrainz or other ids"/>
-					</div>
-					<div class="col-auto">
-						<button class="btn btn-sm btn-outline-primary"><i class="bi bi-search" aria-hidden="true"></i> Search again</button>
-					</div>
-				</form>
-			}
-		</div>
-	</div>
+		</details>
+	}
 }
 
-templ candidateView(id string, p importPrompt, c candidate, open bool) {
-	<details class="border rounded mb-2 candidate" open?={ open }>
-		<summary class="d-flex flex-wrap align-items-center gap-2 px-2 py-1">
-			<span class={ "badge", matchClass(c) }>{ matchPercent(c) }</span>
-			<strong>{ candidateName(c) }</strong>
-			if y := valueString(c.Year); y != "" && y != "0" {
-				<span class="text-body-secondary">{ y }</span>
+// candidateCard shows one Candidate beside the files: its properties next to
+// what the files say now, and each file next to the track it would become.
+templ candidateCard(id string, p importPrompt, c candidate, best bool) {
+	<div class={ "card mb-3 candidate", templ.KV("border-primary", best) }>
+		<div class="card-body">
+			<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+				<span class={ "badge", matchClass(c) }>{ matchPercent(c) }</span>
+				<h2 class="h5 mb-0">{ candidateName(c) }</h2>
+				if y := valueString(c.Year); y != "" && y != "0" {
+					<span class="text-body-secondary">{ y }</span>
+				}
+				@sourceLink(c)
+				<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="ms-auto">
+					<input type="hidden" name="prompt_id" value={ p.ID }/>
+					<input type="hidden" name="candidate" value={ strconv.Itoa(c.Index) }/>
+					<button class={ "btn btn-sm", templ.KV("btn-primary", best), templ.KV("btn-outline-primary", !best) } name="action" value="apply"><i class="bi bi-check-lg" aria-hidden="true"></i> Apply</button>
+				</form>
+			</div>
+			if !hasFields(c) {
+				<p class="small text-body-secondary">
+					<i class="bi bi-info-circle" aria-hidden="true"></i>
+					This prompt came from an older beets-api that only sent what Apply changes, so properties that stay the same aren't shown. Search again to refresh it.
+				</p>
 			}
-			@sourceLink(c)
-			<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="ms-auto">
-				<input type="hidden" name="prompt_id" value={ p.ID }/>
-				<input type="hidden" name="candidate" value={ strconv.Itoa(c.Index) }/>
-				<button class="btn btn-sm btn-primary" name="action" value="apply"><i class="bi bi-check-lg" aria-hidden="true"></i> Apply</button>
-			</form>
-		</summary>
-		<div class="px-2 pb-2">
-			if c.ID != "" {
-				<div class="small text-body-secondary font-monospace mb-1">{ c.ID }</div>
-			}
-			<table class="table table-sm preview-table mb-1">
-				<tbody>
-					for _, f := range candidateFiles(c) {
-						<tr>
-							<td class="small font-monospace text-break field-col">{ baseName(f.Path) }</td>
-							<td class="small">
-								if len(f.Changes) == 0 {
-									<span class="text-body-secondary">no changes</span>
+			<div class="row g-4">
+				<div class="col-lg-5">
+					<table class="table table-sm compare-table mb-1">
+						<thead>
+							<tr><th></th><th>Your files</th><th>{ c.DataSource }</th></tr>
+						</thead>
+						<tbody>
+							for _, f := range candidateFacts(c) {
+								<tr class={ templ.KV("changed", f.Changed) }>
+									<th class="fw-normal text-body-secondary">{ f.Label }</th>
+									<td>{ f.Old }</td>
+									<td>
+										{ f.New }
+										if f.Changed {
+											<i class="bi bi-exclamation-circle text-warning" title="Apply changes this" aria-label="changes"></i>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+					<p class="small text-body-secondary mb-0"><i class="bi bi-exclamation-circle text-warning" aria-hidden="true"></i> marks what Apply changes.</p>
+				</div>
+				if c.Track == nil {
+					<div class="col-lg-7">
+						<table class="table table-sm align-middle track-table mb-1">
+							<thead>
+								<tr><th colspan="2">Your files</th><th></th><th colspan="2">{ c.DataSource }</th></tr>
+							</thead>
+							<tbody>
+								for _, r := range candidateTracks(c) {
+									<tr>
+										<td class="small">
+											<div class="text-break">{ r.File }</div>
+											if r.TitleChanged || r.NumChanged {
+												<div class="text-body-secondary">
+													if r.OldNum != "" {
+														{ r.OldNum }.
+													}
+													{ orDash(r.OldTitle) }
+												</div>
+											}
+										</td>
+										<td class="small text-body-secondary text-end">{ r.OldLength }</td>
+										<td><i class="bi bi-arrow-right text-body-secondary" aria-hidden="true"></i></td>
+										<td class="small">
+											if r.NewNum != "" {
+												<span class={ templ.KV("fw-semibold", r.NumChanged) }>{ r.NewNum }.</span>
+											}
+											<span class={ templ.KV("fw-semibold", r.TitleChanged) }>{ orDash(r.NewTitle) }</span>
+											if r.TitleChanged || r.NumChanged {
+												<i class="bi bi-exclamation-circle text-warning" title="Apply changes this" aria-label="changes"></i>
+											}
+										</td>
+										<td class="small text-body-secondary text-end">{ r.NewLength }</td>
+									</tr>
 								}
-								for _, k := range sortedKeys(f.Changes) {
-									<div class="text-break">
-										<code>{ k }</code> <del>{ valueString(f.Changes[k].Old) }</del> → <ins>{ valueString(f.Changes[k].New) }</ins>
-									</div>
-								}
-							</td>
-						</tr>
-					}
-				</tbody>
-			</table>
+							</tbody>
+						</table>
+					</div>
+				}
+			</div>
 			if len(c.ExtraItems) > 0 {
 				<div class="small text-warning-emphasis">
+					<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
 					{ strconv.Itoa(len(c.ExtraItems)) } files don't match a track:
 					for _, path := range c.ExtraItems {
 						<span class="font-monospace">{ baseName(path) }</span>
@@ -372,6 +418,7 @@ templ candidateView(id string, p importPrompt, c candidate, open bool) {
 			}
 			if len(c.ExtraTracks) > 0 {
 				<div class="small text-warning-emphasis">
+					<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
 					{ strconv.Itoa(len(c.ExtraTracks)) } tracks have no file:
 					for i, t := range c.ExtraTracks {
 						if i > 0 {
@@ -381,8 +428,29 @@ templ candidateView(id string, p importPrompt, c candidate, open bool) {
 					}
 				</div>
 			}
+			if other := otherChanges(c); len(other) > 0 {
+				<details class="mt-2">
+					<summary class="small text-body-secondary">{ strconv.Itoa(len(other)) } more fields Apply also sets ({ strings.Join(other, ", ") })</summary>
+					<table class="table table-sm preview-table mt-2 mb-0">
+						<tbody>
+							for _, f := range candidateFiles(c) {
+								<tr>
+									<td class="small font-monospace text-break field-col">{ baseName(f.Path) }</td>
+									<td class="small">
+										for _, k := range otherChangesOf(f) {
+											<div class="text-break">
+												<code>{ k }</code> <del>{ valueString(f.Changes[k].Old) }</del> → <ins>{ valueString(f.Changes[k].New) }</ins>
+											</div>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</details>
+			}
 		</div>
-	</details>
+	</div>
 }
 
 templ importOutcomes(op importOp) {

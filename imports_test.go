@@ -173,7 +173,21 @@ func albumPrompt() map[string]any {
 			"recommendation": "medium",
 			"candidates": []any{map[string]any{
 				"index": 0, "distance": 0.08, "artist": "The Beatles", "album": "Abbey Road", "year": 1969, "id": "mb-1", "data_source": "MusicBrainz",
-				"tracks":      []any{map[string]any{"path": "/in/a/01.mp3", "changes": map[string]any{"title": map[string]any{"old": "come together", "new": "Come Together"}}}},
+				"tracks": []any{map[string]any{"path": "/in/a/01.mp3",
+					"changes": map[string]any{
+						"title":      map[string]any{"old": "come together", "new": "Come Together"},
+						"year":       map[string]any{"old": 1970, "new": 1969},
+						"mb_albumid": map[string]any{"old": nil, "new": "mb-1"},
+					},
+					"fields": map[string]any{
+						"title":  map[string]any{"old": "come together", "new": "Come Together"},
+						"track":  map[string]any{"old": 1, "new": 1},
+						"length": map[string]any{"old": 259.9, "new": 259.0},
+						"label":  map[string]any{"old": "Apple", "new": "Apple"},
+						"year":   map[string]any{"old": 1970, "new": 1969},
+						"month":  map[string]any{"old": 0, "new": 9},
+						"day":    map[string]any{"old": 0, "new": 26},
+					}}},
 				"extra_items": []any{}, "extra_tracks": []any{"Her Majesty"},
 			}},
 		}}}
@@ -183,8 +197,11 @@ func TestAlbumPromptShowsCandidatesAndChoices(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, albumPrompt()) }
 	rec := get(t, h, "/imports/7")
-	mustContain(t, rec, "92%", "The Beatles – Abbey Road", "1969", `href="https://musicbrainz.org/release/mb-1"`, "musicbrainz.svg?v=", "<details", " open",
-		"01.mp3", "<del>come together</del> → <ins>Come Together</ins>", "Her Majesty",
+	mustContain(t, rec, "92%", "The Beatles – Abbey Road", "1969", `href="https://musicbrainz.org/release/mb-1"`, "musicbrainz.svg?v=",
+		"Release date</th><td>1970</td><td>1969-09-26", // changed, and marked
+		"Label</th><td>Apple</td><td>Apple",            // unchanged, still shown
+		"01.mp3", "1. come together", `<span class="fw-semibold">Come Together</span>`, "4:20", "4:19",
+		"1 more fields Apply also sets (mb_albumid)", "<code>mb_albumid</code>", "Her Majesty",
 		`name="action" value="apply"`, `name="candidate" value="0"`, `name="prompt_id" value="p1"`,
 		">Use as-is<", ">Import as tracks<", ">Group albums<", ">Skip<", "Search again", `value="Abbey Rd"`, "medium")
 	if strings.Contains(rec.Body.String(), `hx-trigger`) {

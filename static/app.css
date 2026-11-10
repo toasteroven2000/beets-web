@@ -27,3 +27,5 @@
 .candidate > summary { cursor: pointer; }
 .choice { max-width: 14rem; }
 .source-icon { height: 1em; width: auto; vertical-align: -.125em; }
+.compare-table tr.changed td:last-child { font-weight: 600; }
+.track-table td:first-child { max-width: 16rem; }

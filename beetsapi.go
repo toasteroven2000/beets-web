@@ -445,6 +445,7 @@ type importRequest struct {
 type fileChanges struct {
 	Path    string            `json:"path"`
 	Changes map[string]change `json:"changes"`
+	Fields  map[string]change `json:"fields"` // shown fields, changed or not
 }
 
 // candidate is a possible match for an Import Task: an album match has

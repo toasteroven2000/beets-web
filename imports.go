@@ -288,6 +288,150 @@ func sourceIconFile(source string) string {
 	return ""
 }
 
+// factRow is one property of a Candidate beside what the files say now.
+type factRow struct {
+	Label, Old, New string
+	Changed         bool
+}
+
+// candidateFacts are the properties a person checks a Candidate by, shown
+// whether or not they change. Album properties are the same on every file, so
+// the first one speaks for all.
+func candidateFacts(c candidate) []factRow {
+	files := candidateFiles(c)
+	if len(files) == 0 {
+		return nil
+	}
+	f := files[0].Fields
+	if f == nil { // a beets-api that sends only changes
+		f = files[0].Changes
+	}
+	keys := [][2]string{{"albumartist", "Album artist"}, {"album", "Album"}, {"date", "Release date"}, {"label", "Label"},
+		{"catalognum", "Catalogue no."}, {"country", "Country"}, {"media", "Media"}, {"albumtype", "Album type"}}
+	if c.Track != nil {
+		keys = [][2]string{{"artist", "Artist"}, {"title", "Title"}, {"album", "Album"}, {"date", "Release date"}, {"length", "Length"}}
+	}
+	var rows []factRow
+	for _, k := range keys {
+		var old, new string
+		switch k[0] {
+		case "date":
+			old, new = dateText(f, func(c change) any { return c.Old }), dateText(f, func(c change) any { return c.New })
+		case "length":
+			old, new = lengthText(f["length"].Old), lengthText(f["length"].New)
+		default:
+			ch, ok := f[k[0]]
+			if !ok {
+				continue
+			}
+			old, new = valueString(ch.Old), valueString(ch.New)
+		}
+		if old == "" && new == "" {
+			continue
+		}
+		rows = append(rows, factRow{k[1], old, new, old != new})
+	}
+	return rows
+}
+
+// dateText joins year, month and day into one date, leaving out zero parts.
+func dateText(f map[string]change, side func(change) any) string {
+	var parts []string
+	for i, k := range []string{"year", "month", "day"} {
+		n, _ := strconv.Atoi(valueString(side(f[k])))
+		if n == 0 {
+			break
+		}
+		if i == 0 {
+			parts = append(parts, strconv.Itoa(n))
+		} else {
+			parts = append(parts, fmt.Sprintf("%02d", n))
+		}
+	}
+	return strings.Join(parts, "-")
+}
+
+func lengthText(v any) string {
+	f, err := strconv.ParseFloat(valueString(v), 64)
+	if err != nil || f <= 0 {
+		return ""
+	}
+	s := int(math.Round(f))
+	return fmt.Sprintf("%d:%02d", s/60, s%60)
+}
+
+// hasFields tells whether beets-api sent the properties a Candidate keeps as
+// well as those it changes; prompts from before it did only have changes.
+func hasFields(c candidate) bool {
+	files := candidateFiles(c)
+	return len(files) > 0 && files[0].Fields != nil
+}
+
+// trackRow is one file and the track it would become.
+type trackRow struct {
+	File                               string
+	OldNum, OldTitle, NewNum, NewTitle string
+	OldLength, NewLength               string
+	NumChanged, TitleChanged           bool
+}
+
+func candidateTracks(c candidate) []trackRow {
+	var rows []trackRow
+	for _, f := range candidateFiles(c) {
+		fields := f.Fields
+		if fields == nil {
+			fields = f.Changes
+		}
+		side := func(k string, old bool) string {
+			ch, ok := fields[k]
+			if !ok {
+				return ""
+			}
+			if old {
+				return valueString(ch.Old)
+			}
+			return valueString(ch.New)
+		}
+		r := trackRow{
+			File:   baseName(f.Path),
+			OldNum: side("track", true), NewNum: side("track", false),
+			OldTitle: side("title", true), NewTitle: side("title", false),
+			OldLength: lengthText(fields["length"].Old), NewLength: lengthText(fields["length"].New),
+		}
+		r.NumChanged, r.TitleChanged = r.OldNum != r.NewNum, r.OldTitle != r.NewTitle
+		rows = append(rows, r)
+	}
+	return rows
+}
+
+// shownFields are the fields the card shows as facts or tracks; every other
+// change is bookkeeping, folded away.
+var shownFields = map[string]bool{"albumartist": true, "album": true, "year": true, "month": true, "day": true, "label": true,
+	"catalognum": true, "country": true, "media": true, "albumtype": true, "artist": true, "title": true, "track": true, "length": true}
+
+// otherChanges are the bookkeeping fields Apply also sets, such as ids.
+func otherChanges(c candidate) []string {
+	seen := map[string]bool{}
+	for _, f := range candidateFiles(c) {
+		for k := range f.Changes {
+			if !shownFields[k] {
+				seen[k] = true
+			}
+		}
+	}
+	return sortedKeys(seen)
+}
+
+func otherChangesOf(f fileChanges) []string {
+	var keys []string
+	for _, k := range sortedKeys(f.Changes) {
+		if !shownFields[k] {
+			keys = append(keys, k)
+		}
+	}
+	return keys
+}
+
 func baseName(p string) string { return path.Base(p) }
 
 // existingScope tells whether a duplicate prompt's existing records are
