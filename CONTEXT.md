@@ -52,5 +52,45 @@ Approving a whole Preview so its changes get applied.
 _Avoid_: Approve, commit
 
 **Set art**:
-Making an image an Album's art, whether the Album had art or not. It replaces and deletes any previous art file straight away, so it isn't a Modification and has no Preview; when it replaces art, the UI shows the current and new art side by side first.
+Making an image an Album's art, whether the Album had art or not. It takes effect straight away, so it isn't a Modification and has no Preview; when it replaces art, the UI shows the current and new art side by side first. beets-api archives the previous art.
 _Avoid_: Upload, replace cover
+
+**Remove art**:
+Clearing an Album's art. beets-api archives the image before deleting its file; the UI asks first.
+_Avoid_: Delete art
+
+### Importing
+
+**Import**:
+Bringing music files from Import Paths into the Library, equivalent to `beet import`.
+_Avoid_: Ingest, upload
+
+**Import Path**:
+A directory beets-api allows Imports to read from. Whatever is picked for an Import lies inside one.
+_Avoid_: Inbox, source folder, drop folder
+
+**Import Task**:
+One Album's or one Item's worth of files within an Import, which needs its own Choice.
+_Avoid_: Job
+
+**Candidate**:
+A possible metadata match for an Import Task, found by a metadata source.
+_Avoid_: Result, suggestion
+
+**Choice**:
+What to do with an Import Task, such as applying a Candidate, importing as-is, or skipping.
+_Avoid_: Decision, answer
+
+### Audit
+
+**Audit**:
+The append-only record beets-api keeps of every change it made to the Library. Previews and rejected Modifications change nothing, so they aren't in it.
+_Avoid_: History, log
+
+**Audit entry**:
+One change to one Album or Item (including its art): when, by which Client, what changed, and the Modification or Import that caused it.
+_Avoid_: Event, revision
+
+**Client**:
+The name a caller of beets-api gives itself; this UI is `beets-ui`. A label, not proof.
+_Avoid_: User, actor

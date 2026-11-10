@@ -26,6 +26,7 @@ templ artTab(p recordPage) {
 						{ p.Art.Dims() } · <a href={ templ.URL(artURL(id)) } target="_blank" rel="noopener">Full size</a>
 					</div>
 					<div class="small text-body-secondary font-monospace text-break">{ p.Record.Str("artpath") }</div>
+					<a class="btn btn-sm btn-outline-danger mt-2" href={ templ.URL(artURL(id) + "/remove") }>Remove art</a>
 				} else {
 					<div class="art-none rounded border d-flex align-items-center justify-content-center text-body-secondary">No art</div>
 				}
@@ -130,7 +131,7 @@ templ artCompareView(p artComparePage) {
 				<li class="breadcrumb-item active" aria-current="page">Set art</li>
 			</ol>
 		</nav>
-		@pageHeader("Replace the art of "+title, "The current art file is deleted when the new art is set.") {
+		@pageHeader("Replace the art of "+title, "beets-api archives the current art before replacing it.") {
 		}
 		<div class="row g-4 mb-4">
 			<div class="col-md-6">
@@ -156,6 +157,36 @@ templ artCompareView(p artComparePage) {
 		</div>
 		<form method="post" action={ templ.SafeURL(artURL(id) + "/new/" + p.Token) } class="d-flex gap-2">
 			<button class="btn btn-primary">Set art</button>
+			<a class="btn btn-outline-secondary" href={ templ.URL(recordTabURL(albums, id, "art")) }>Cancel</a>
+		</form>
+	}
+}
+
+// artRemoveView asks before Remove art.
+templ artRemoveView(album record, current artInfo) {
+	{{ id := album.ID() }}
+	{{ title := orDash(album.Str("album")) }}
+	@layout("Remove art · "+title, "Albums") {
+		<nav aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href="/albums">Albums</a></li>
+				<li class="breadcrumb-item"><a href={ templ.URL(recordTabURL(albums, id, "art")) }>{ title }</a></li>
+				<li class="breadcrumb-item active" aria-current="page">Remove art</li>
+			</ol>
+		</nav>
+		@pageHeader("Remove the art of "+title+"?", "beets-api archives the image before deleting its file; the UI can't bring it back.") {
+		}
+		<div class="mb-4 art-remove">
+			<a href={ templ.URL(artURL(id)) } target="_blank" rel="noopener">
+				<img class="img-fluid rounded border" src={ artURL(id) } alt="Current art"/>
+			</a>
+			<div class="small text-body-secondary mt-1">
+				{ current.Dims() } · <a href={ templ.URL(artURL(id)) } target="_blank" rel="noopener">Full size</a>
+			</div>
+			<div class="small text-body-secondary font-monospace text-break">{ album.Str("artpath") }</div>
+		</div>
+		<form method="post" action={ templ.SafeURL(artURL(id) + "/remove") } class="d-flex gap-2">
+			<button class="btn btn-danger">Remove art</button>
 			<a class="btn btn-outline-secondary" href={ templ.URL(recordTabURL(albums, id, "art")) }>Cancel</a>
 		</form>
 	}

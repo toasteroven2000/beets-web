@@ -28,6 +28,7 @@ templ recordView(p recordPage) {
 					if y := yearText(p.Record); y != "" {
 						<span>{ " · " + y }</span>
 					}
+					<span>· <a href={ templ.URL(auditURL(p.Scope, p.Record.ID())) }>Audit</a></span>
 				</div>
 				if p.Scope == items {
 					<div class="small text-body-secondary font-monospace text-break">{ p.Record.Str("path") }</div>

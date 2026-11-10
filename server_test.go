@@ -307,7 +307,7 @@ func TestPreviewAgainResendsRequest(t *testing.T) {
 	}
 }
 
-func TestHistoryWithoutEndpointSaysSo(t *testing.T) {
+func TestModificationsWithoutEndpointSaysSo(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /modifications"] = func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 405, map[string]any{"detail": "Method Not Allowed"})

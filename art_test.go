@@ -116,7 +116,7 @@ func TestSetArtWithoutArtSetsItStraightAway(t *testing.T) {
 		t.Fatalf("status %d location %q", rec.Code, rec.Header().Get("Location"))
 	}
 	r, body := f.last(t, "PUT", "/albums/2/art")
-	if body != string(img) || r.Header.Get("Content-Type") != "image/png" {
+	if body != string(img) || r.Header.Get("Content-Type") != "image/png" || r.Header.Get("X-Client") != "beets-ui" {
 		t.Errorf("PUT %q %d bytes", r.Header.Get("Content-Type"), len(body))
 	}
 }
@@ -230,5 +230,37 @@ func TestArtSearchRanksAgainstTheAlbum(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("lacks %q", want)
 		}
+	}
+}
+
+func TestRemoveArtAsksFirst(t *testing.T) {
+	f, h, _ := newArtTest(t, http.NotFound)
+	f.routes["GET /albums/2"] = album("/music/cover.jpg")
+	f.routes["GET /list"] = noItems
+	f.routes["GET /albums/2/art"] = func(w http.ResponseWriter, r *http.Request) { w.Write(pngBytes(t, 4, 4)) }
+	f.routes["DELETE /albums/2/art"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{}) }
+
+	mustContain(t, get(t, h, "/albums/2?tab=art"), `href="/albums/2/art/remove"`)
+	mustContain(t, get(t, h, "/albums/2/art/remove"), "Remove the art of Let It Be?", "4×4", `action="/albums/2/art/remove"`)
+	for _, r := range f.requests {
+		if r.Method == "DELETE" {
+			t.Fatal("removed before asking")
+		}
+	}
+	rec := post(t, h, "/albums/2/art/remove", nil)
+	if rec.Header().Get("Location") != "/albums/2?tab=art&removed=1" {
+		t.Fatalf("went to %q", rec.Header().Get("Location"))
+	}
+	if r, _ := f.last(t, "DELETE", "/albums/2/art"); r.Header.Get("X-Client") != "beets-ui" {
+		t.Errorf("X-Client %q", r.Header.Get("X-Client"))
+	}
+	mustContain(t, get(t, h, "/albums/2?tab=art&removed=1"), "Art removed.")
+}
+
+func TestRemoveArtWithoutArtGoesBack(t *testing.T) {
+	f, h, _ := newArtTest(t, http.NotFound)
+	f.routes["GET /albums/2"] = album(nil)
+	if rec := get(t, h, "/albums/2/art/remove"); rec.Header().Get("Location") != "/albums/2?tab=art" {
+		t.Errorf("went to %q", rec.Header().Get("Location"))
 	}
 }

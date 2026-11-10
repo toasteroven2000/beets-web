@@ -20,3 +20,9 @@
 .htmx-indicator { display: none; }
 .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: block; }
 .art-current { top: 1rem; }
+.art-remove { max-width: 24rem; }
+.audit-table del { color: var(--bs-danger-text-emphasis); }
+.audit-table ins { color: var(--bs-success-text-emphasis); text-decoration: none; }
+.audit-table del:empty::before, .audit-table ins:empty::before { content: "(empty)"; font-style: italic; opacity: .6; }
+.candidate > summary { cursor: pointer; }
+.choice { max-width: 14rem; }

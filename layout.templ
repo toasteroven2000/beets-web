@@ -24,7 +24,9 @@ templ layout(title string, active string) {
 							@navLink("/artists", "Artists", active)
 							@navLink("/albums", "Albums", active)
 							@navLink("/items", "Items", active)
-							@navLink("/modifications", "History", active)
+							@navLink("/modifications", "Modifications", active)
+							@navLink("/audit", "Audit", active)
+							@navLink("/import", "Import", active)
 						</ul>
 						if active != "Home" {
 							<form class="d-flex me-md-2 my-2 my-md-0" role="search" method="get" action="/search">

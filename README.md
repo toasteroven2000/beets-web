@@ -30,6 +30,7 @@ Without devenv: `go generate ./... && go run . -api http://127.0.0.1:8338`.
 | `server.go`     | Routes and handlers                                                    |
 | `beetsapi.go`   | The beets-api client                                                   |
 | `art.go`        | Album art: searching iTunes and Deezer, fetching an image to Set art   |
+| `imports.go`    | Import: browsing Import Paths, starting an Import, answering its prompts |
 | `query.go`      | Building beets queries: Artist regexes, filters, sorting               |
 | `pages.go`      | The data each page renders, and template helpers                       |
 | `templates.go`  | Rendering and the embedded static assets                               |
@@ -44,10 +45,16 @@ The `*_templ.go` files are not committed. Run `go generate ./...` before `go bui
 These features need endpoints that beets-api doesn't have yet. Until they exist, their pages say so instead of failing.
 
 - Artist list: `GET /artists` (beets-api `.scratch/artists/`)
-- History: `GET /modifications` (beets-api `.scratch/modifications-history/`)
+- Modifications list: `GET /modifications` (beets-api `.scratch/modifications-history/`)
+- Audit: `GET /audit`
 - Album art: `GET /albums/{id}/art` (beets-api `.scratch/album-art/`)
-- Removing Album art: `DELETE /albums/{id}/art` (beets-api `.scratch/album-art/issues/02-remove-album-art.md`)
 
 ## Album art
 
-The Art tab searches the iTunes Search API and the Deezer API (no keys), and fetches images from URLs you enter, so beets-ui needs outbound HTTPS. Set art sends the image to beets-api's `PUT /albums/{id}/art`, which saves it as `cover.jpg` or `cover.png` and deletes the previous art file. When an Album already has art, the UI shows the current and new art side by side first; the fetched image waits in memory for up to an hour.
+The Art tab searches the iTunes Search API and the Deezer API (no keys), and fetches images from URLs you enter, so beets-ui needs outbound HTTPS. Set art sends the image to beets-api's `PUT /albums/{id}/art`, which saves it as `cover.jpg` or `cover.png`; Remove art calls `DELETE /albums/{id}/art`. beets-api archives replaced and removed art. Every request carries `X-Client: beets-ui`, so beets-api's audit shows which changes came from the UI. When an Album already has art, the UI shows the current and new art side by side first; the fetched image waits in memory for up to an hour.
+
+## Import
+
+The Import page browses beets-api's Import Paths (`GET /import-paths`, set with `BEETS_API_IMPORT_PATHS`) and imports one folder at a time. beets-ui never reads the files itself, so it needs no access to them. Whether files are copied or moved is beets' `import` config; the page says which before you start, and warns when the originals will be deleted. While beets works the Import page polls every second; when beets needs a Choice it shows the Candidates with their field changes, and the album, item or duplicate choices beets offers. "Remove old" on a duplicate deletes the existing files, so it asks first.
+
+beets-api only accepts `Host: 127.0.0.1` or `localhost`, so beets-ui in another container can't reach it yet (beets-api `.scratch/imports/issues/02-allowed-hosts.md`).

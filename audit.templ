@@ -1,0 +1,106 @@
+package main
+
+import (
+	"strconv"
+	"strings"
+)
+
+// auditView lists every change beets-api made to the Library, newest first.
+templ auditView(p auditPage) {
+	@layout("Audit", "Audit") {
+		@pageHeader("Audit", "Every change beets-api made to the Library, newest first") {
+		}
+		if p.Unavailable {
+			<div class="alert alert-warning">
+				This beets-api has no <code>GET /audit</code> yet, so there's no Audit to show.
+			</div>
+		} else {
+			<form method="get" action="/audit" class="row g-2 align-items-end mb-3">
+				<div class="col-sm-5 col-md-4">
+					<label class="form-label small mb-1" for="audit-target">Album or Item</label>
+					<input class="form-control form-control-sm font-monospace" id="audit-target" name="target" value={ p.Target } placeholder="album:5 or item:12"/>
+				</div>
+				<div class="col-sm-4 col-md-3">
+					<label class="form-label small mb-1" for="audit-action">Action</label>
+					<select class="form-select form-select-sm" id="audit-action" name="action">
+						<option value="">Any</option>
+						for _, a := range auditActions {
+							<option value={ a } selected?={ a == p.Action }>{ a }</option>
+						}
+					</select>
+				</div>
+				<div class="col-auto d-flex gap-2">
+					if p.Operation > 0 {
+						<input type="hidden" name="operation" value={ strconv.Itoa(p.Operation) }/>
+					}
+					<button class="btn btn-sm btn-primary">Filter</button>
+					if p.Target != "" || p.Action != "" || p.Operation > 0 {
+						<a class="btn btn-sm btn-outline-secondary" href="/audit">Clear</a>
+					}
+				</div>
+			</form>
+			if p.Operation > 0 {
+				<p class="small">Only changes made by <a href={ templ.URL(operationURL(auditEntry{Action: firstAction(p.Entries), OperationID: &p.Operation})) }>{ p.OperationName() }</a>.</p>
+			}
+			if len(p.Entries) == 0 {
+				<p class="text-body-secondary">No changes recorded.</p>
+			} else {
+				<div class="table-responsive">
+					<table class="table table-sm align-middle audit-table">
+						<thead>
+							<tr><th>When</th><th>Action</th><th>Target</th><th>Client</th><th>Changes</th></tr>
+						</thead>
+						<tbody>
+							for _, e := range p.Entries {
+								<tr>
+									<td class="small text-nowrap">{ e.At }</td>
+									<td>
+										<code>{ e.Action }</code>
+										if e.OperationID != nil {
+											<div class="small">
+												if strings.HasSuffix(e.Action, ".modify") {
+													<a href={ templ.URL(operationURL(e)) }>Modification { strconv.Itoa(*e.OperationID) }</a>
+												} else {
+													<a href={ templ.URL(operationURL(e)) }>Import { strconv.Itoa(*e.OperationID) }</a>
+												}
+											</div>
+										}
+									</td>
+									<td class="text-nowrap">
+										if u := targetURL(e.Target); u != "" {
+											<a class="font-monospace small" href={ templ.URL(u) }>{ e.Target }</a>
+										} else {
+											<span class="font-monospace small">{ e.Target }</span>
+										}
+									</td>
+									<td class="small">{ orDash(e.Client) }</td>
+									<td class="small">
+										for _, c := range auditChanges(e.Changes) {
+											<div class="text-break">
+												<code>{ c.Key }</code>
+												if c.Pair {
+													<del>{ c.Old }</del> → <ins>{ c.New }</ins>
+												} else {
+													<span class="text-body-secondary">{ c.Text }</span>
+												}
+											</div>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				<div class="d-flex gap-2 align-items-center">
+					if p.Offset > 0 {
+						<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.URL(max(0, p.Offset-50))) }>Newer</a>
+					}
+					if p.Offset+len(p.Entries) < p.Total {
+						<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.URL(p.Offset+50)) }>Older</a>
+					}
+					<span class="small text-body-secondary">{ strconv.Itoa(p.Total) } changes</span>
+				</div>
+			}
+		}
+	}
+}

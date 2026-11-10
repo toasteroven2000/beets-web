@@ -133,8 +133,26 @@ type modResult struct {
 	Error   string `json:"error"`
 }
 
+// opID is an operation id. beets-api sends integers now and sent strings
+// before; the UI only ever passes it back.
+type opID string
+
+func (o *opID) UnmarshalJSON(b []byte) error {
+	var n json.Number
+	if err := json.Unmarshal(b, &n); err == nil {
+		*o = opID(n.String())
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	*o = opID(s)
+	return nil
+}
+
 type modification struct {
-	ID        string     `json:"id"`
+	ID        opID       `json:"id"`
 	Status    string     `json:"status"`
 	Request   modRequest `json:"request"`
 	Result    modResult  `json:"result"`
@@ -142,9 +160,9 @@ type modification struct {
 	UpdatedAt string     `json:"updated_at"`
 }
 
-// modSummary is one row of the history, without the Preview.
+// modSummary is one row of the Modifications list, without the Preview.
 type modSummary struct {
-	ID        string     `json:"id"`
+	ID        opID       `json:"id"`
 	Status    string     `json:"status"`
 	Request   modRequest `json:"request"`
 	CreatedAt string     `json:"created_at"`
@@ -154,6 +172,22 @@ type modSummary struct {
 type modList struct {
 	Total   int          `json:"total"`
 	Results []modSummary `json:"results"`
+}
+
+// auditEntry is one change beets-api made to one Album or Item.
+type auditEntry struct {
+	ID          int            `json:"id"`
+	At          string         `json:"at"`
+	Client      string         `json:"client"`
+	Action      string         `json:"action"` // e.g. album.modify, art.upload
+	Target      string         `json:"target"` // e.g. album:5
+	OperationID *int           `json:"operation_id"`
+	Changes     map[string]any `json:"changes"`
+}
+
+type auditList struct {
+	Total   int          `json:"total"`
+	Results []auditEntry `json:"results"`
 }
 
 // apiError is a non-2xx answer from beets-api, with its `detail` as text.
@@ -176,6 +210,10 @@ type beetsAPI struct {
 	http *http.Client
 }
 
+// clientName is sent as X-Client, so beets-api's audit shows which changes
+// came through the UI.
+const clientName = "beets-ui"
+
 func (c *beetsAPI) do(ctx context.Context, method, path string, query url.Values, body, out any) error {
 	u := c.base + path
 	if len(query) > 0 {
@@ -196,6 +234,7 @@ func (c *beetsAPI) do(ctx context.Context, method, path string, query url.Values
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	req.Header.Set("X-Client", clientName)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("beets-api unreachable: %w", err)
@@ -344,6 +383,7 @@ func (c *beetsAPI) SetAlbumArt(ctx context.Context, id int, data []byte) error {
 	if t, ok := imageType(data); ok {
 		req.Header.Set("Content-Type", t)
 	}
+	req.Header.Set("X-Client", clientName)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("beets-api unreachable: %w", err)
@@ -354,4 +394,190 @@ func (c *beetsAPI) SetAlbumArt(ctx context.Context, id int, data []byte) error {
 		return &apiError{Status: resp.StatusCode, Detail: detailText(body)}
 	}
 	return nil
+}
+
+// RemoveAlbumArt clears an Album's art. beets-api archives the image first.
+func (c *beetsAPI) RemoveAlbumArt(ctx context.Context, id int) error {
+	return c.do(ctx, http.MethodDelete, "/albums/"+strconv.Itoa(id)+"/art", nil, nil, nil)
+}
+
+// Audit lists changes newest first, optionally for one target ("album:5"),
+// some actions, or one Modification or Import (operation > 0).
+func (c *beetsAPI) Audit(ctx context.Context, target string, actions []string, operation, limit, offset int) (auditList, error) {
+	v := url.Values{"limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}
+	if target != "" {
+		v.Set("target", target)
+	}
+	if operation > 0 {
+		v.Set("operation_id", strconv.Itoa(operation))
+	}
+	for _, a := range actions {
+		v.Add("action", a)
+	}
+	var out auditList
+	err := c.do(ctx, http.MethodGet, "/audit", v, nil, &out)
+	return out, err
+}
+
+// importEntry is a directory or file inside an Import Path.
+type importEntry struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	Type  string `json:"type"` // "dir" or "file"
+	MTime string `json:"mtime"`
+	Size  *int64 `json:"size"`
+}
+
+// importBrowse is one directory's children, or the Import Paths themselves
+// when Path is nil.
+type importBrowse struct {
+	Path    *string       `json:"path"`
+	Parent  *string       `json:"parent"`
+	Entries []importEntry `json:"entries"`
+}
+
+type importRequest struct {
+	Paths      []string `json:"paths"`
+	Singletons bool     `json:"singletons"`
+}
+
+// fileChanges are the field changes applying a Candidate makes to one file.
+type fileChanges struct {
+	Path    string            `json:"path"`
+	Changes map[string]change `json:"changes"`
+}
+
+// candidate is a possible match for an Import Task: an album match has
+// Album and Tracks, a track match has Title and Track.
+type candidate struct {
+	Index       int           `json:"index"`
+	Distance    float64       `json:"distance"`
+	Artist      string        `json:"artist"`
+	Album       string        `json:"album"`
+	Title       string        `json:"title"`
+	Year        any           `json:"year"`
+	ID          string        `json:"id"`
+	DataSource  string        `json:"data_source"`
+	Tracks      []fileChanges `json:"tracks"`
+	Track       *fileChanges  `json:"track"`
+	ExtraItems  []string      `json:"extra_items"`
+	ExtraTracks []any         `json:"extra_tracks"`
+}
+
+// importPrompt is the Choice an Import is waiting for. Kind is "album",
+// "item" or "duplicate".
+type importPrompt struct {
+	ID             string            `json:"id"`
+	Kind           string            `json:"kind"`
+	Paths          []string          `json:"paths"`
+	Choices        []string          `json:"choices"`
+	Current        map[string]string `json:"current"`
+	Recommendation string            `json:"recommendation"`
+	Candidates     []candidate       `json:"candidates"`
+	Existing       []record          `json:"existing"`
+}
+
+// importChoice is a Choice already made, with the prompt it answered.
+type importChoice struct {
+	Paths     []string `json:"paths"`
+	Kind      string   `json:"kind"`
+	Action    string   `json:"action"`
+	Candidate *int     `json:"candidate"`
+	Artist    *string  `json:"artist"`
+	Name      *string  `json:"name"`
+	SearchIDs []string `json:"search_ids"`
+}
+
+// importOutcome is what became of one Import Task.
+type importOutcome struct {
+	Paths   []string `json:"paths"`
+	Skipped bool     `json:"skipped"`
+	Items   []record `json:"items"`
+}
+
+type importResult struct {
+	Prompt   *importPrompt   `json:"prompt"`
+	Choices  []importChoice  `json:"choices"`
+	Outcomes []importOutcome `json:"outcomes"`
+	Error    string          `json:"error"`
+}
+
+// importOp is one Import. Status is running, waiting_for_choice, completed,
+// aborted or failed.
+type importOp struct {
+	ID        opID          `json:"id"`
+	Status    string        `json:"status"`
+	Request   importRequest `json:"request"`
+	Result    importResult  `json:"result"`
+	Counts    *importCounts `json:"counts"` // only in the Imports list
+	CreatedAt string        `json:"created_at"`
+	UpdatedAt string        `json:"updated_at"`
+}
+
+// importCounts summarises an Import in the list, which leaves out its prompt.
+type importCounts struct {
+	Choices int `json:"choices"`
+	Tasks   int `json:"tasks"`
+	Skipped int `json:"skipped"`
+	Items   int `json:"items"`
+}
+
+type importList struct {
+	Total   int        `json:"total"`
+	Results []importOp `json:"results"`
+}
+
+// choiceRequest answers an Import's prompt.
+type choiceRequest struct {
+	PromptID  string   `json:"prompt_id"`
+	Action    string   `json:"action"`
+	Candidate *int     `json:"candidate"`
+	Artist    *string  `json:"artist"`
+	Name      *string  `json:"name"`
+	SearchIDs []string `json:"search_ids"`
+}
+
+// ImportPaths lists the Import Paths, or with a path, that directory's children.
+func (c *beetsAPI) ImportPaths(ctx context.Context, path string) (importBrowse, error) {
+	v := url.Values{}
+	if path != "" {
+		v.Set("path", path)
+	}
+	var out importBrowse
+	err := c.do(ctx, http.MethodGet, "/import-paths", v, nil, &out)
+	return out, err
+}
+
+func (c *beetsAPI) StartImport(ctx context.Context, req importRequest) (importOp, error) {
+	var out importOp
+	err := c.do(ctx, http.MethodPost, "/imports", nil, req, &out)
+	return out, err
+}
+
+func (c *beetsAPI) Import(ctx context.Context, id string) (importOp, error) {
+	var out importOp
+	err := c.do(ctx, http.MethodGet, "/imports/"+url.PathEscape(id), nil, nil, &out)
+	return out, err
+}
+
+func (c *beetsAPI) ImportChoice(ctx context.Context, id string, req choiceRequest) error {
+	if req.SearchIDs == nil {
+		req.SearchIDs = []string{}
+	}
+	return c.do(ctx, http.MethodPost, "/imports/"+url.PathEscape(id)+"/choice", nil, req, nil)
+}
+
+func (c *beetsAPI) AbortImport(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, "/imports/"+url.PathEscape(id), nil, nil, nil)
+}
+
+// Imports lists Imports newest first, optionally only those with a status.
+func (c *beetsAPI) Imports(ctx context.Context, statuses []string, limit, offset int) (importList, error) {
+	v := url.Values{"limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}
+	for _, s := range statuses {
+		v.Add("status", s)
+	}
+	var out importList
+	err := c.do(ctx, http.MethodGet, "/imports", v, nil, &out)
+	return out, err
 }

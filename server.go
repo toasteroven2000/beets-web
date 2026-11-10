@@ -42,15 +42,23 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /albums/{id}/art", s.handleArt)
 	mux.HandleFunc("GET /albums/{id}/art/search", s.handleArtSearch)
 	mux.HandleFunc("POST /albums/{id}/art", s.handleSetArt)
+	mux.HandleFunc("GET /albums/{id}/art/remove", s.handleArtRemoveForm)
+	mux.HandleFunc("POST /albums/{id}/art/remove", s.handleArtRemove)
 	mux.HandleFunc("GET /albums/{id}/art/new/{token}", s.handleArtCompare)
 	mux.HandleFunc("GET /albums/{id}/art/new/{token}/image", s.handleArtPendingImage)
 	mux.HandleFunc("POST /albums/{id}/art/new/{token}", s.handleArtConfirm)
 	mux.HandleFunc("GET /modify", s.handleModifyForm)
 	mux.HandleFunc("POST /modifications", s.handleCreateModification)
-	mux.HandleFunc("GET /modifications", s.handleHistory)
+	mux.HandleFunc("GET /modifications", s.handleModifications)
+	mux.HandleFunc("GET /audit", s.handleAudit)
 	mux.HandleFunc("GET /modifications/{id}", s.handleModification)
 	mux.HandleFunc("POST /modifications/{id}/confirm", s.handleConfirm)
 	mux.HandleFunc("POST /modifications/{id}/again", s.handleAgain)
+	mux.HandleFunc("GET /import", s.handleImportStart)
+	mux.HandleFunc("POST /imports", s.handleCreateImport)
+	mux.HandleFunc("GET /imports/{id}", s.handleImport)
+	mux.HandleFunc("POST /imports/{id}/choice", s.handleImportChoice)
+	mux.HandleFunc("POST /imports/{id}/abort", s.handleImportAbort)
 	return mux
 }
 
@@ -271,8 +279,11 @@ func (s *server) handleRecord(k scope) http.HandlerFunc {
 			fail(w, err)
 			return
 		}
-		if r.URL.Query().Get("set") == "1" {
+		switch {
+		case r.URL.Query().Get("set") == "1":
 			p.ArtNotice = "Art set."
+		case r.URL.Query().Get("removed") == "1":
+			p.ArtNotice = "Art removed."
 		}
 		render(w, http.StatusOK, recordView(p))
 	}
@@ -439,7 +450,7 @@ func (s *server) createAndShow(w http.ResponseWriter, r *http.Request, req modRe
 		fail(w, err)
 		return
 	}
-	http.Redirect(w, r, "/modifications/"+url.PathEscape(mod.ID), http.StatusSeeOther)
+	http.Redirect(w, r, "/modifications/"+url.PathEscape(string(mod.ID)), http.StatusSeeOther)
 }
 
 func (s *server) handleModification(w http.ResponseWriter, r *http.Request) {
@@ -473,16 +484,37 @@ func (s *server) handleAgain(w http.ResponseWriter, r *http.Request) {
 	s.createAndShow(w, r, mod.Request)
 }
 
-func (s *server) handleHistory(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleModifications(w http.ResponseWriter, r *http.Request) {
 	res, err := s.api.Modifications(r.Context(), 50, offsetParam(r))
-	p := historyPage{Mods: res.Results, Total: res.Total, Offset: offsetParam(r)}
+	p := modificationsPage{Mods: res.Results, Total: res.Total, Offset: offsetParam(r)}
 	if isStatus(err, http.StatusNotFound) || isStatus(err, http.StatusMethodNotAllowed) {
 		p.Unavailable = true
 	} else if err != nil {
 		fail(w, err)
 		return
 	}
-	render(w, http.StatusOK, historyView(p))
+	render(w, http.StatusOK, modificationsView(p))
+}
+
+func (s *server) handleAudit(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	p := auditPage{Target: strings.TrimSpace(q.Get("target")), Action: q.Get("action"), Offset: offsetParam(r)}
+	if n, err := strconv.Atoi(q.Get("operation")); err == nil && n > 0 {
+		p.Operation = n
+	}
+	var actions []string
+	if p.Action != "" {
+		actions = []string{p.Action}
+	}
+	res, err := s.api.Audit(r.Context(), p.Target, actions, p.Operation, 50, p.Offset)
+	if isStatus(err, http.StatusNotFound) || isStatus(err, http.StatusMethodNotAllowed) {
+		p.Unavailable = true
+	} else if err != nil {
+		fail(w, err)
+		return
+	}
+	p.Entries, p.Total = res.Results, res.Total
+	render(w, http.StatusOK, auditView(p))
 }
 
 // handleArtSearch renders candidate art for the Art tab, loaded by htmx.
@@ -650,4 +682,34 @@ func sentence(s string) string {
 	}
 	r, n := utf8.DecodeRuneInString(s)
 	return string(unicode.ToUpper(r)) + s[n:]
+}
+
+// handleArtRemoveForm asks before removing an Album's art.
+func (s *server) handleArtRemoveForm(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r)
+	if !ok {
+		return
+	}
+	rec, err := s.api.Get(r.Context(), albums, id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if rec.Str("artpath") == "" {
+		http.Redirect(w, r, recordTabURL(albums, id, "art"), http.StatusSeeOther)
+		return
+	}
+	render(w, http.StatusOK, artRemoveView(rec, s.currentArt(r.Context(), id)))
+}
+
+func (s *server) handleArtRemove(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r)
+	if !ok {
+		return
+	}
+	if err := s.api.RemoveAlbumArt(r.Context(), id); err != nil {
+		fail(w, err)
+		return
+	}
+	http.Redirect(w, r, recordTabURL(albums, id, "art")+"&removed=1", http.StatusSeeOther)
 }
