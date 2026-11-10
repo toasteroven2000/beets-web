@@ -50,11 +50,6 @@ templ importStartView(p importStartPage) {
 			if p.NoSources {
 				@noSourcesWarning()
 			}
-			if p.Mode.Text != "" {
-				<div class={ "alert py-2", templ.KV("alert-warning", p.Mode.Warn), templ.KV("alert-light border", !p.Mode.Warn) }>
-					{ p.Mode.Text } <span class="text-body-secondary small">(beets' <code>import</code> config)</span>
-				</div>
-			}
 			<form method="post" action="/imports">
 				<input type="hidden" name="here" value={ p.Here() }/>
 				<div class="d-flex flex-wrap align-items-center gap-3 py-2 mb-2 border-bottom">
@@ -162,7 +157,7 @@ templ importHistory(p importStartPage) {
 
 // importView follows one Import: it polls while beets works, shows the prompt
 // when beets needs a Choice, and the outcome at the end.
-templ importView(op importOp, stale, noSources bool) {
+templ importView(op importOp, stale, noSources bool, mode importMode) {
 	{{ id := string(op.ID) }}
 	@layout("Import "+id, "Import") {
 		<nav aria-label="breadcrumb">
@@ -200,7 +195,7 @@ templ importView(op importOp, stale, noSources bool) {
 					</div>
 				case "waiting_for_choice":
 					if pr := op.Result.Prompt; pr != nil {
-						@importPromptView(id, *pr, noSources)
+						@importPromptView(id, *pr, noSources, mode)
 					}
 				case "failed":
 					<div class="alert alert-danger">The Import failed: { orDash(op.Result.Error) }</div>
@@ -232,7 +227,7 @@ templ importView(op importOp, stale, noSources bool) {
 	}
 }
 
-templ importPromptView(id string, p importPrompt, noSources bool) {
+templ importPromptView(id string, p importPrompt, noSources bool, mode importMode) {
 	<p class="mb-1">
 		switch p.Kind {
 			case "duplicate":
@@ -265,7 +260,7 @@ templ importPromptView(id string, p importPrompt, noSources bool) {
 		</ul>
 	}
 	for i, c := range p.Candidates {
-		@candidateCard(id, p, c, i == 0)
+		@candidateCard(id, p, c, i == 0, mode)
 	}
 	if len(p.Candidates) == 0 && p.Kind != "duplicate" {
 		if noSources {
@@ -321,9 +316,11 @@ templ importPromptView(id string, p importPrompt, noSources bool) {
 	}
 }
 
-// candidateCard shows one Candidate beside the files: its properties next to
-// what the files say now, and each file next to the track it would become.
-templ candidateCard(id string, p importPrompt, c candidate, best bool) {
+// candidateCard shows one Candidate as the files would be once applied: every
+// album property and every track, with old → new only where Apply changes it.
+// The best Candidate says what happens to the files beside its Apply button.
+templ candidateCard(id string, p importPrompt, c candidate, best bool, mode importMode) {
+	{{ facts := candidateFacts(c) }}
 	<div class={ "card mb-3 candidate", templ.KV("border-primary", best) }>
 		<div class="card-body">
 			<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -333,80 +330,79 @@ templ candidateCard(id string, p importPrompt, c candidate, best bool) {
 					<span class="text-body-secondary">{ y }</span>
 				}
 				@sourceLink(c)
-				<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="ms-auto">
-					<input type="hidden" name="prompt_id" value={ p.ID }/>
-					<input type="hidden" name="candidate" value={ strconv.Itoa(c.Index) }/>
-					<button class={ "btn btn-sm", templ.KV("btn-primary", best), templ.KV("btn-outline-primary", !best) } name="action" value="apply"><i class="bi bi-check-lg" aria-hidden="true"></i> Apply</button>
-				</form>
+				<div class="ms-auto d-flex flex-wrap align-items-center justify-content-end gap-2">
+					if best && mode.Text != "" {
+						<span class={ "small", templ.KV("text-warning-emphasis", mode.Warn), templ.KV("text-body-secondary", !mode.Warn) } title="beets' import config">
+							<i class="bi bi-files" aria-hidden="true"></i>
+							{ mode.Text }
+						</span>
+					}
+					<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") }>
+						<input type="hidden" name="prompt_id" value={ p.ID }/>
+						<input type="hidden" name="candidate" value={ strconv.Itoa(c.Index) }/>
+						<button class={ "btn btn-sm", templ.KV("btn-primary", best), templ.KV("btn-outline-primary", !best) } name="action" value="apply"><i class="bi bi-check-lg" aria-hidden="true"></i> Apply</button>
+					</form>
+				</div>
 			</div>
 			if !hasFields(c) {
 				<p class="small text-body-secondary">
 					<i class="bi bi-info-circle" aria-hidden="true"></i>
-					This prompt came from an older beets-api that only sent what Apply changes, so properties that stay the same aren't shown. Search again to refresh it.
+					This prompt came from an older beets-api that only sent what Apply changes, so values that stay the same aren't shown. Search again to refresh it.
 				</p>
 			}
-			<div class="row g-4">
-				<div class="col-lg-5">
-					<table class="table table-sm compare-table mb-1">
-						<thead>
-							<tr><th></th><th>Your files</th><th>{ c.DataSource }</th></tr>
-						</thead>
-						<tbody>
-							for _, f := range candidateFacts(c) {
-								<tr class={ templ.KV("changed", f.Changed) }>
-									<th class="fw-normal text-body-secondary">{ f.Label }</th>
-									<td>{ f.Old }</td>
-									<td>
-										{ f.New }
-										if f.Changed {
-											<i class="bi bi-exclamation-circle text-warning" title="Apply changes this" aria-label="changes"></i>
-										}
-									</td>
-								</tr>
-							}
-						</tbody>
-					</table>
-					<p class="small text-body-secondary mb-0"><i class="bi bi-exclamation-circle text-warning" aria-hidden="true"></i> marks what Apply changes.</p>
-				</div>
-				if c.Track == nil {
-					<div class="col-lg-7">
-						<table class="table table-sm align-middle track-table mb-1">
-							<thead>
-								<tr><th colspan="2">Your files</th><th></th><th colspan="2">{ c.DataSource }</th></tr>
-							</thead>
-							<tbody>
-								for _, r := range candidateTracks(c) {
-									<tr>
-										<td class="small">
-											<div class="text-break">{ r.File }</div>
-											if r.TitleChanged || r.NumChanged {
-												<div class="text-body-secondary">
-													if r.OldNum != "" {
-														{ r.OldNum }.
-													}
-													{ orDash(r.OldTitle) }
-												</div>
-											}
-										</td>
-										<td class="small text-body-secondary text-end">{ r.OldLength }</td>
-										<td><i class="bi bi-arrow-right text-body-secondary" aria-hidden="true"></i></td>
-										<td class="small">
-											if r.NewNum != "" {
-												<span class={ templ.KV("fw-semibold", r.NumChanged) }>{ r.NewNum }.</span>
-											}
-											<span class={ templ.KV("fw-semibold", r.TitleChanged) }>{ orDash(r.NewTitle) }</span>
-											if r.TitleChanged || r.NumChanged {
-												<i class="bi bi-exclamation-circle text-warning" title="Apply changes this" aria-label="changes"></i>
-											}
-										</td>
-										<td class="small text-body-secondary text-end">{ r.NewLength }</td>
-									</tr>
-								}
-							</tbody>
-						</table>
-					</div>
+			<div class="small text-body-secondary mb-1">
+				if n := changedFacts(facts); n > 0 {
+					{ c.DataSource } · { strconv.Itoa(n) } of { strconv.Itoa(len(facts)) } change
+				} else {
+					{ c.DataSource } · no changes
 				}
 			</div>
+			<table class="table table-sm table-borderless w-auto mb-0 delta-table">
+				<tbody>
+					for _, f := range facts {
+						<tr class={ templ.KV("changed", f.Changed) }>
+							<th class="fw-normal text-body-secondary pe-4">{ f.Label }</th>
+							<td>
+								if f.Changed {
+									@delta(f.Old, f.New)
+								} else {
+									{ f.New }
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+			if c.Track == nil {
+				{{ discs := candidateDiscs(c) }}
+				<div class="row g-3 mt-1">
+					for _, d := range discs {
+						<div class={ "col-lg-6" }>
+							<div class="small text-body-secondary mb-1">{ d.Label(len(discs) > 1) }</div>
+							<table class="table table-sm table-borderless mb-0 small delta-table track-table">
+								<tbody>
+									for _, r := range d.Rows {
+										<tr class={ templ.KV("changed", r.Changed()) }>
+											<td class="text-body-secondary font-monospace text-end pe-2 track-num">{ orDash(r.NewNum) }</td>
+											<td>
+												if r.TitleChanged {
+													@delta(r.OldTitle, r.NewTitle)
+												} else {
+													{ r.Title() }
+												}
+												if r.NumChanged && r.OldNum != "" {
+													<span class="text-body-secondary">(was track { r.OldNum })</span>
+												}
+											</td>
+											<td class="text-body-secondary text-end ps-2 track-length">{ r.Length }</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					}
+				</div>
+			}
 			if len(c.ExtraItems) > 0 {
 				<div class="small text-warning-emphasis">
 					<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
@@ -548,4 +544,11 @@ templ sourceIcon(source string) {
 	if f := sourceIconFile(source); f != "" {
 		<img class="source-icon" src={ assetURL(f) } alt="" aria-hidden="true"/>
 	}
+}
+
+// delta is a value that Apply changes: what it is now, then what it becomes.
+templ delta(old, new string) {
+	<del>{ old }</del>
+	<i class="bi bi-arrow-right text-body-secondary" aria-hidden="true"></i>
+	<ins>{ new }</ins>
 }

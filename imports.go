@@ -24,7 +24,6 @@ type importStartPage struct {
 	Status        string // History's status filter, "" for any
 	AllTotal      int    // every Import, for the History tab's badge
 	Browse        importBrowse
-	Mode          importMode
 	Imports       []importOp
 	Total         int // Imports beets-api has run
 	Offset        int
@@ -370,9 +369,22 @@ func hasFields(c candidate) bool {
 // trackRow is one file and the track it would become.
 type trackRow struct {
 	File                               string
+	Disc                               string
 	OldNum, OldTitle, NewNum, NewTitle string
-	OldLength, NewLength               string
+	Length                             string
 	NumChanged, TitleChanged           bool
+}
+
+// Changed tells whether Apply changes anything about the track.
+func (r trackRow) Changed() bool { return r.NumChanged || r.TitleChanged }
+
+// Title is the track's title once applied; a prompt from an older beets-api
+// sends none for tracks that stay the same, so those show their file.
+func (r trackRow) Title() string {
+	if r.NewTitle == "" && r.OldTitle == "" {
+		return r.File
+	}
+	return r.NewTitle
 }
 
 func candidateTracks(c candidate) []trackRow {
@@ -394,9 +406,13 @@ func candidateTracks(c candidate) []trackRow {
 		}
 		r := trackRow{
 			File:   baseName(f.Path),
+			Disc:   side("disc", false),
 			OldNum: side("track", true), NewNum: side("track", false),
 			OldTitle: side("title", true), NewTitle: side("title", false),
-			OldLength: lengthText(fields["length"].Old), NewLength: lengthText(fields["length"].New),
+			Length: lengthText(fields["length"].Old),
+		}
+		if r.Length == "" {
+			r.Length = lengthText(fields["length"].New)
 		}
 		r.NumChanged, r.TitleChanged = r.OldNum != r.NewNum, r.OldTitle != r.NewTitle
 		rows = append(rows, r)
@@ -404,10 +420,70 @@ func candidateTracks(c candidate) []trackRow {
 	return rows
 }
 
+// discRows are the tracks of one disc, in the order beets sent them.
+type discRows struct {
+	Disc string
+	Rows []trackRow
+}
+
+// Renamed counts the tracks Apply changes.
+func (d discRows) Renamed() int {
+	n := 0
+	for _, r := range d.Rows {
+		if r.Changed() {
+			n++
+		}
+	}
+	return n
+}
+
+// Label is the disc's heading: its number when there are several discs, then
+// how many tracks it has and how many Apply changes.
+func (d discRows) Label(multi bool) string {
+	label := plural(len(d.Rows), "track", "tracks")
+	if n := d.Renamed(); n > 0 {
+		label += fmt.Sprintf(" · %d changed", n)
+	} else {
+		label += " · all match"
+	}
+	if multi {
+		label = "Disc " + d.Disc + " · " + label
+	}
+	return label
+}
+
+// candidateDiscs groups a Candidate's tracks by disc. Tracks with no disc
+// (an older beets-api, or singletons) all go in one group.
+func candidateDiscs(c candidate) []discRows {
+	var discs []discRows
+	at := map[string]int{}
+	for _, r := range candidateTracks(c) {
+		i, ok := at[r.Disc]
+		if !ok {
+			i = len(discs)
+			at[r.Disc] = i
+			discs = append(discs, discRows{Disc: r.Disc})
+		}
+		discs[i].Rows = append(discs[i].Rows, r)
+	}
+	return discs
+}
+
+// changedFacts counts the album properties Apply changes.
+func changedFacts(rows []factRow) int {
+	n := 0
+	for _, r := range rows {
+		if r.Changed {
+			n++
+		}
+	}
+	return n
+}
+
 // shownFields are the fields the card shows as facts or tracks; every other
 // change is bookkeeping, folded away.
 var shownFields = map[string]bool{"albumartist": true, "album": true, "year": true, "month": true, "day": true, "label": true,
-	"catalognum": true, "country": true, "media": true, "albumtype": true, "artist": true, "title": true, "track": true, "length": true}
+	"catalognum": true, "country": true, "media": true, "albumtype": true, "artist": true, "title": true, "track": true, "disc": true, "length": true}
 
 // otherChanges are the bookkeeping fields Apply also sets, such as ids.
 func otherChanges(c candidate) []string {
@@ -513,7 +589,6 @@ func (s *server) importStartPage(ctx context.Context, tab, dir, status string, o
 		p.Browse = b
 		p.NoImportPaths = err == nil && b.Path == nil && len(b.Entries) == 0
 		if cfg, err := s.api.Config(ctx); err == nil {
-			p.Mode = importModeFrom(cfg)
 			p.NoSources = noMetadataSource(cfg)
 		}
 	} else {
@@ -577,13 +652,12 @@ func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	noSources := false
-	if pr := op.Result.Prompt; pr != nil && len(pr.Candidates) == 0 && pr.Kind != "duplicate" {
-		if cfg, err := s.api.Config(r.Context()); err == nil {
-			noSources = noMetadataSource(cfg)
-		}
+	var cfg map[string]any
+	if op.Result.Prompt != nil && op.Result.Prompt.Kind != "duplicate" {
+		cfg, _ = s.api.Config(r.Context())
 	}
-	render(w, http.StatusOK, importView(op, r.URL.Query().Get("stale") != "", noSources))
+	noSources := op.Result.Prompt != nil && len(op.Result.Prompt.Candidates) == 0 && noMetadataSource(cfg)
+	render(w, http.StatusOK, importView(op, r.URL.Query().Get("stale") != "", noSources, importModeFrom(cfg)))
 }
 
 func (s *server) handleImportChoice(w http.ResponseWriter, r *http.Request) {

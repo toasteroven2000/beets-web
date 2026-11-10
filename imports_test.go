@@ -26,15 +26,12 @@ func importPathsRoute(f *fakeAPI) {
 func TestImportBrowsesImportPaths(t *testing.T) {
 	f, h := newTest(t)
 	importPathsRoute(f)
-	f.routes["GET /config"] = func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"import": map[string]any{"copy": true, "move": false}})
-	}
 	mustContain(t, get(t, h, "/import"), `href="/import?path=%2Fin%2Fincoming"`, "Import Paths", ">Import<")
 	rec := get(t, h, "/import?path=/in/incoming")
 	mustContain(t, rec,
 		`name="path" value="/in/incoming/Abbey Road"`, // one Import button per folder
 		`name="path" value="/in/incoming"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Import this folder`,
-		`href="/import"><i class="bi bi-arrow-up" aria-hidden="true"></i> Up`, "3.0 MB", "copied into the Library; the originals stay")
+		`href="/import"><i class="bi bi-arrow-up" aria-hidden="true"></i> Up`, "3.0 MB")
 	if strings.Contains(rec.Body.String(), `value="/in/incoming/loose.mp3"`) {
 		t.Error("files get an Import button; only folders should")
 	}
@@ -196,16 +193,42 @@ func albumPrompt() map[string]any {
 func TestAlbumPromptShowsCandidatesAndChoices(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, albumPrompt()) }
+	f.routes["GET /config"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"import": map[string]any{"copy": true}})
+	}
 	rec := get(t, h, "/imports/7")
-	mustContain(t, rec, "92%", "The Beatles – Abbey Road", "1969", `href="https://musicbrainz.org/release/mb-1"`, "musicbrainz.svg?v=",
-		"Release date</th><td>1970</td><td>1969-09-26", // changed, and marked
-		"Label</th><td>Apple</td><td>Apple",            // unchanged, still shown
-		"01.mp3", "1. come together", `<span class="fw-semibold">Come Together</span>`, "4:20", "4:19",
+	mustContain(t, rec, "92%", "copied into the Library; the originals stay", // beside Apply
+		"MusicBrainz · 1 of 2 change", "The Beatles – Abbey Road", "1969", `href="https://musicbrainz.org/release/mb-1"`, "musicbrainz.svg?v=",
+		"<del>1970</del>", "<ins>1969-09-26</ins>", // changed: old → new
+		"<td>Apple</td>", // unchanged: just the value
+		"<del>come together</del>", "<ins>Come Together</ins>", "4:20",
 		"1 more fields Apply also sets (mb_albumid)", "<code>mb_albumid</code>", "Her Majesty",
 		`name="action" value="apply"`, `name="candidate" value="0"`, `name="prompt_id" value="p1"`,
 		">Use as-is<", ">Import as tracks<", ">Group albums<", ">Skip<", "Search again", `value="Abbey Rd"`, "medium")
 	if strings.Contains(rec.Body.String(), `hx-trigger`) {
 		t.Error("polls while waiting for a Choice")
+	}
+}
+
+func TestCandidateListsEveryTrackByDiscWithArrowsOnlyOnChanges(t *testing.T) {
+	f, h := newTest(t)
+	track := func(disc, n int, old, new string) map[string]any {
+		return map[string]any{"path": "/in/a/x.mp3", "changes": map[string]any{}, "fields": map[string]any{
+			"disc": map[string]any{"old": disc, "new": disc}, "track": map[string]any{"old": n, "new": n},
+			"title": map[string]any{"old": old, "new": new}, "length": map[string]any{"old": 61.0, "new": 61.0}}}
+	}
+	prompt := albumPrompt()
+	cand := prompt["result"].(map[string]any)["prompt"].(map[string]any)["candidates"].([]any)[0].(map[string]any)
+	cand["tracks"] = []any{track(1, 1, "Same One", "Same One"), track(1, 2, "sloppy two", "Sloppy Two"), track(2, 1, "Same Three", "Same Three")}
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, prompt) }
+	f.routes["GET /config"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"import": map[string]any{"move": true}})
+	}
+	rec := get(t, h, "/imports/7")
+	mustContain(t, rec, "Disc 1 · 2 tracks · 1 changed", "Disc 2 · 1 track · all match", "Same One", "Same Three",
+		"<del>sloppy two</del>", "<ins>Sloppy Two</ins>", "originals are deleted") // a move says so by Apply
+	if strings.Count(rec.Body.String(), "<del>") != 1 {
+		t.Errorf("only the one changed title should have an old value shown:\n%s", rec.Body.String())
 	}
 }
 
