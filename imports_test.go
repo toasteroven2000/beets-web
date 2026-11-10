@@ -335,9 +335,81 @@ func TestFinishedImportLinksWhatItMade(t *testing.T) {
 				}}})
 	}
 	rec := get(t, h, "/imports/7")
-	mustContain(t, rec, `href="/albums/3"`, "2 Items", "Skipped", "Nothing imported", "Applied Candidate 1", `href="/audit?operation=7"`)
+	mustContain(t, rec, `href="/albums/3"`, "2 Items", "Skipped", "Nothing imported", "Applied Candidate 1", `href="/audit?operation=7"`,
+		`href="/imports/7/undo"`)
 	if strings.Contains(rec.Body.String(), "Abort Import") {
 		t.Error("finished Import offers Abort")
+	}
+}
+
+func finishedImport(extra map[string]any) map[string]any {
+	result := map[string]any{"choices": []any{}, "outcomes": []any{
+		map[string]any{"paths": []string{"/in/a"}, "skipped": false, "items": []any{map[string]any{"id": 11, "album_id": 3}}}}}
+	for k, v := range extra {
+		result[k] = v
+	}
+	return map[string]any{"id": 7, "status": "completed", "request": map[string]any{"paths": []string{"/in"}}, "result": result}
+}
+
+func TestUndoneImportSaysSoInsteadOfOfferingUndo(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, finishedImport(map[string]any{"undone": map[string]any{"at": "2026-11-10T09:00:00+00:00"}}))
+	}
+	rec := get(t, h, "/imports/7")
+	mustContain(t, rec, "Undone")
+	if strings.Contains(rec.Body.String(), "/imports/7/undo") {
+		t.Error("offers to undo an Import that was undone")
+	}
+}
+
+func TestUndoPreviewAsksBeforeDeletingFiles(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, finishedImport(nil)) }
+	f.routes["GET /imports/7/undo"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"import_id": 7, "mode": "copy", "allowed": true, "reasons": []string{},
+			"albums": []any{map[string]any{"target": "album:3", "id": 3, "albumartist": "AC/DC", "album": "Back in Black",
+				"items": []any{map[string]any{"id": 11, "path": "/lib/AC_DC/Back in Black/01.mp3"}}, "art": "/lib/AC_DC/Back in Black/cover.jpg"}},
+			"items": []any{}, "changes_since": []any{}})
+	}
+	rec := get(t, h, "/imports/7/undo")
+	mustContain(t, rec, "Undo Import 7?", "files it copied in", "originals in the Import Path stay", `href="/albums/3"`, "AC/DC – Back in Black",
+		"/lib/AC_DC/Back in Black/01.mp3", "cover.jpg", `action="/imports/7/undo"`, "Remove and delete files")
+}
+
+func TestUndoPreviewExplainsWhyItCannotBeUndone(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, finishedImport(nil)) }
+	f.routes["GET /imports/7/undo"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"import_id": 7, "mode": "copy", "allowed": false,
+			"reasons": []string{"1 later changes were made to what the Import added"},
+			"albums":  []any{}, "items": []any{},
+			"changes_since": []any{map[string]any{"id": 9, "at": "2026-11-10T08:00:00+00:00", "action": "album.modify", "target": "album:3"}}})
+	}
+	rec := get(t, h, "/imports/7/undo")
+	mustContain(t, rec, "can&#39;t be undone", "1 later changes were made", "album.modify", `href="/albums/3"`, `href="/audit?operation=7"`)
+	if strings.Contains(rec.Body.String(), "Remove and delete files") {
+		t.Error("offers to undo an Import that may not be undone")
+	}
+}
+
+func TestConfirmingUndoShowsItsRemovalsInTheAudit(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["POST /imports/7/undo"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{}) }
+	rec := post(t, h, "/imports/7/undo", nil)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/audit?operation=7" {
+		t.Errorf("got %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestUndoRefusedAfterThePreviewGoesBackToThePreview(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["POST /imports/7/undo"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 409, map[string]any{"detail": "cannot undo this Import: it was already undone"})
+	}
+	rec := post(t, h, "/imports/7/undo", nil)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/imports/7/undo" {
+		t.Errorf("got %d %s", rec.Code, rec.Header().Get("Location"))
 	}
 }
 

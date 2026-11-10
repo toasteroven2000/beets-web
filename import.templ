@@ -484,7 +484,88 @@ templ importOutcomes(op importOp) {
 			}
 		</tbody>
 	</table>
-	<a class="small" href={ templ.URL(importAuditURL(op)) }><i class="bi bi-journal-text" aria-hidden="true"></i> What this Import changed, in the Audit</a>
+	<div class="d-flex flex-wrap align-items-center gap-3">
+		<a class="small" href={ templ.URL(importAuditURL(op)) }><i class="bi bi-journal-text" aria-hidden="true"></i> What this Import changed, in the Audit</a>
+		if op.Result.Undone != nil {
+			<span class="small text-body-secondary"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Undone { shortTime(op.Result.Undone.At) }</span>
+		} else if importedCount(op) > 0 && !importActive(op.Status) {
+			<a class="btn btn-sm btn-outline-danger" href={ templ.URL("/imports/" + string(op.ID) + "/undo") }><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Undo this Import…</a>
+		}
+	</div>
+}
+
+// importUndoView shows what undoing an Import would remove and asks before
+// doing it, since it deletes files. When it can't be undone it says why.
+templ importUndoView(op importOp, plan undoPlan) {
+	{{ id := string(op.ID) }}
+	@layout("Undo · Import "+id, "Import") {
+		<nav aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href="/import">Import</a></li>
+				<li class="breadcrumb-item"><a href={ templ.URL("/imports/" + id) }>Import { id }</a></li>
+				<li class="breadcrumb-item active" aria-current="page">Undo</li>
+			</ol>
+		</nav>
+		if plan.Allowed {
+			@pageHeader("Undo Import "+id+"?", "beets removes what this Import added from the Library and deletes the files it "+undoModeText(plan.Mode)+" in. Your originals in the Import Path stay. Nothing archives the removed files.") {
+			}
+		} else {
+			@pageHeader("Import "+id+" can't be undone", "") {
+			}
+			<div class="alert alert-warning">
+				<ul class="mb-0">
+					for _, r := range plan.Reasons {
+						<li>{ r }</li>
+					}
+				</ul>
+			</div>
+		}
+		if len(plan.ChangesSince) > 0 {
+			<p class="small">Changed since the Import:</p>
+			<ul class="small">
+				for _, c := range plan.ChangesSince {
+					<li><code>{ c.Action }</code> <a href={ templ.URL(targetURL(c.Target)) }>{ c.Target }</a> <span class="text-body-secondary">{ c.At }</span></li>
+				}
+			</ul>
+			<p class="small"><a href={ templ.URL(importAuditURL(op)) }>The Import in the Audit</a></p>
+		}
+		if len(plan.Albums) > 0 || len(plan.Items) > 0 {
+			<h2 class="h6">{ undoHeading(plan) }</h2>
+			<ul>
+				for _, a := range plan.Albums {
+					<li>
+						<a href={ templ.URL(recordURL(albums, a.ID)) }>{ orDash(a.AlbumArtist) } – { orDash(a.Album) }</a>
+						<span class="text-body-secondary small">· { plural(len(a.Items), "file", "files") }</span>
+						<details>
+							<summary class="small text-body-secondary">Files</summary>
+							<div class="font-monospace small text-break">
+								for _, it := range a.Items {
+									<div>{ it.Path }</div>
+								}
+								if a.Art != nil {
+									<div>{ *a.Art }</div>
+								}
+							</div>
+						</details>
+					</li>
+				}
+				for _, it := range plan.Items {
+					<li>
+						<a href={ templ.URL(recordURL(items, it.ID)) }>{ orDash(it.Artist) } – { orDash(it.Title) }</a>
+						<div class="font-monospace small text-break text-body-secondary">{ it.Path }</div>
+					</li>
+				}
+			</ul>
+		}
+		if plan.Allowed {
+			<form method="post" action={ templ.SafeURL("/imports/" + id + "/undo") } class="d-flex gap-2">
+				<button class="btn btn-danger"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Remove and delete files</button>
+				<a class="btn btn-outline-secondary" href={ templ.URL("/imports/" + id) }>Cancel</a>
+			</form>
+		} else {
+			<a class="btn btn-outline-secondary" href={ templ.URL("/imports/" + id) }>Back to Import { id }</a>
+		}
+	}
 }
 
 // importRemoveView asks before "Remove old", which deletes files.

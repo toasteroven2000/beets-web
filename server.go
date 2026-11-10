@@ -59,6 +59,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /imports/{id}", s.handleImport)
 	mux.HandleFunc("POST /imports/{id}/choice", s.handleImportChoice)
 	mux.HandleFunc("POST /imports/{id}/abort", s.handleImportAbort)
+	mux.HandleFunc("GET /imports/{id}/undo", s.handleImportUndo)
+	mux.HandleFunc("POST /imports/{id}/undo", s.handleImportUndoConfirm)
 	return mux
 }
 

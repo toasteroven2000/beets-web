@@ -744,3 +744,68 @@ func shortTime(t string) string {
 	}
 	return t
 }
+
+// handleImportUndo previews undoing an Import: what would go, or why it can't.
+func (s *server) handleImportUndo(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	op, err := s.api.Import(r.Context(), id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	plan, err := s.api.UndoPreview(r.Context(), id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	render(w, http.StatusOK, importUndoView(op, plan))
+}
+
+// handleImportUndoConfirm undoes the Import, then shows its removals in the
+// Audit. A 409 means it may no longer be undone; the preview says why.
+func (s *server) handleImportUndoConfirm(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	err := s.api.UndoImport(r.Context(), id)
+	if isStatus(err, http.StatusConflict) {
+		http.Redirect(w, r, "/imports/"+url.PathEscape(id)+"/undo", http.StatusSeeOther)
+		return
+	}
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	http.Redirect(w, r, "/audit?"+url.Values{"operation": {id}}.Encode(), http.StatusSeeOther)
+}
+
+// undoModeText says in words what the Import did with its files.
+func undoModeText(mode string) string {
+	switch mode {
+	case "copy":
+		return "copied"
+	case "move":
+		return "moved"
+	case "copy_delete":
+		return "copied, then deleted the originals of,"
+	case "link":
+		return "linked"
+	case "in_place":
+		return "added in place"
+	}
+	return "imported"
+}
+
+// importedCount is how many Items an Import put in the Library.
+func importedCount(op importOp) int {
+	n := 0
+	for _, o := range op.Result.Outcomes {
+		n += len(o.Items)
+	}
+	return n
+}
+
+func undoHeading(plan undoPlan) string {
+	if plan.Allowed {
+		return "These would be removed from the Library"
+	}
+	return "What the Import added"
+}

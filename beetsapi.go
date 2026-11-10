@@ -501,6 +501,9 @@ type importResult struct {
 	Choices  []importChoice  `json:"choices"`
 	Outcomes []importOutcome `json:"outcomes"`
 	Error    string          `json:"error"`
+	Undone   *struct {
+		At string `json:"at"`
+	} `json:"undone"` // set once the Import has been undone
 }
 
 // importOp is one Import. Status is running, waiting_for_choice, completed,
@@ -581,4 +584,48 @@ func (c *beetsAPI) Imports(ctx context.Context, statuses []string, limit, offset
 	var out importList
 	err := c.do(ctx, http.MethodGet, "/imports", v, nil, &out)
 	return out, err
+}
+
+// undoPlan is what undoing an Import would remove, and why it may not be done.
+type undoPlan struct {
+	ImportID     int          `json:"import_id"`
+	Mode         string       `json:"mode"`
+	Allowed      bool         `json:"allowed"`
+	Reasons      []string     `json:"reasons"`
+	Albums       []undoAlbum  `json:"albums"`
+	Items        []undoItem   `json:"items"`
+	ChangesSince []undoChange `json:"changes_since"`
+}
+
+type undoAlbum struct {
+	ID          int        `json:"id"`
+	AlbumArtist string     `json:"albumartist"`
+	Album       string     `json:"album"`
+	Items       []undoItem `json:"items"`
+	Art         *string    `json:"art"`
+}
+
+type undoItem struct {
+	ID     int    `json:"id"`
+	Artist string `json:"artist"`
+	Title  string `json:"title"`
+	Path   string `json:"path"`
+}
+
+// undoChange is a later Audit entry for something the Import added.
+type undoChange struct {
+	ID     int    `json:"id"`
+	At     string `json:"at"`
+	Action string `json:"action"`
+	Target string `json:"target"`
+}
+
+func (c *beetsAPI) UndoPreview(ctx context.Context, id string) (undoPlan, error) {
+	var out undoPlan
+	err := c.do(ctx, http.MethodGet, "/imports/"+url.PathEscape(id)+"/undo", nil, nil, &out)
+	return out, err
+}
+
+func (c *beetsAPI) UndoImport(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodPost, "/imports/"+url.PathEscape(id)+"/undo", nil, nil, nil)
 }
