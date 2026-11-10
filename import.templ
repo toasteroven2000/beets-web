@@ -21,7 +21,25 @@ templ importStartView(p importStartPage) {
 				}
 			</div>
 		}
-		if p.NoImportPaths {
+		<ul class="nav nav-tabs mb-3">
+			<li class="nav-item">
+				if p.Tab == "paths" {
+					<a class="nav-link active" aria-current="page" href={ templ.URL(p.PathsURL()) }><i class="bi bi-folder2-open" aria-hidden="true"></i> Import Paths</a>
+				} else {
+					<a class="nav-link" href={ templ.URL(p.PathsURL()) }><i class="bi bi-folder2-open" aria-hidden="true"></i> Import Paths</a>
+				}
+			</li>
+			<li class="nav-item">
+				if p.Tab == "history" {
+					<a class="nav-link active" aria-current="page" href={ templ.URL(p.HistoryURL(0)) }><i class="bi bi-clock-history" aria-hidden="true"></i> History <span class="badge text-bg-secondary">{ strconv.Itoa(p.AllTotal) }</span></a>
+				} else {
+					<a class="nav-link" href={ templ.URL(p.HistoryURL(0)) }><i class="bi bi-clock-history" aria-hidden="true"></i> History <span class="badge text-bg-secondary">{ strconv.Itoa(p.AllTotal) }</span></a>
+				}
+			</li>
+		</ul>
+		if p.Tab == "history" {
+			@importHistory(p)
+		} else if p.NoImportPaths {
 			<div class="alert alert-warning">
 				beets-api has no Import Paths. Set <code>BEETS_API_IMPORT_PATHS</code> to the directories it may import from.
 			</div>
@@ -35,7 +53,7 @@ templ importStartView(p importStartPage) {
 				<input type="hidden" name="here" value={ p.Here() }/>
 				<div class="d-flex flex-wrap align-items-center gap-3 py-2 mb-2 border-bottom">
 					if u := p.UpURL(); u != "" {
-						<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(u) }>Up</a>
+						<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(u) }><i class="bi bi-arrow-up" aria-hidden="true"></i> Up</a>
 						<span class="font-monospace small text-break">{ p.Here() }</span>
 					} else {
 						<span class="fw-semibold">Import Paths</span>
@@ -45,7 +63,7 @@ templ importStartView(p importStartPage) {
 						<label class="form-check-label small" for="singletons">Singletons: import files as Items, not Albums</label>
 					</div>
 					if p.Here() != "" {
-						<button class="btn btn-sm btn-primary" name="path" value={ p.Here() }>Import this folder</button>
+						<button class="btn btn-sm btn-primary" name="path" value={ p.Here() }><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Import this folder</button>
 					}
 				</div>
 				if len(p.Browse.Entries) == 0 {
@@ -59,12 +77,12 @@ templ importStartView(p importStartPage) {
 							for _, e := range p.Browse.Entries {
 								<tr>
 									if e.Type == "dir" {
-										<td>📁 <a href={ templ.URL(importBrowseURL(e.Path)) }>{ e.Name }</a></td>
+										<td><i class="bi bi-folder" aria-hidden="true"></i> <a href={ templ.URL(importBrowseURL(e.Path)) }>{ e.Name }</a></td>
 										<td></td>
 										<td class="small text-body-secondary text-nowrap">{ shortTime(e.MTime) }</td>
-										<td class="text-end"><button class="btn btn-sm btn-outline-primary" name="path" value={ e.Path }>Import</button></td>
+										<td class="text-end"><button class="btn btn-sm btn-outline-primary" name="path" value={ e.Path }><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Import</button></td>
 									} else {
-										<td class="text-body-secondary">{ e.Name }</td>
+										<td class="text-body-secondary"><i class="bi bi-file-earmark" aria-hidden="true"></i> { e.Name }</td>
 										<td class="small text-end text-nowrap">{ sizeText(e.Size) }</td>
 										<td class="small text-body-secondary text-nowrap">{ shortTime(e.MTime) }</td>
 										<td></td>
@@ -76,40 +94,63 @@ templ importStartView(p importStartPage) {
 				}
 			</form>
 		}
-		<h2 class="h5 mt-4" id="imports">Imports</h2>
-		if len(p.Imports) == 0 {
-			<p class="small text-body-secondary">No Imports yet.</p>
-		} else {
-			<table class="table table-sm align-middle">
-				<thead>
-					<tr><th>Import</th><th>Status</th><th>Paths</th><th>Result</th><th>Started</th></tr>
-				</thead>
-				<tbody>
-					for _, op := range p.Imports {
-						<tr>
-							<td><a href={ templ.URL("/imports/" + string(op.ID)) }>{ string(op.ID) }</a></td>
-							<td><span class={ "badge", importStatusClass(op.Status) }>{ statusText(op.Status) }</span></td>
-							<td class="font-monospace small text-break">
-								for _, path := range op.Request.Paths {
-									<div>{ path }</div>
-								}
-							</td>
-							<td class="small">{ countsText(op) }</td>
-							<td class="small text-nowrap">{ shortTime(op.CreatedAt) }</td>
-						</tr>
-					}
-				</tbody>
-			</table>
-			<div class="d-flex gap-2 align-items-center">
-				if p.Offset > 0 {
-					<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.ListURL(max(0, p.Offset-importsPerPage))) }>Newer</a>
+	}
+}
+
+// importHistory lists past Imports, newest first.
+templ importHistory(p importStartPage) {
+	<form method="get" action="/import" class="d-flex flex-wrap gap-2 align-items-end mb-3">
+		<input type="hidden" name="tab" value="history"/>
+		<div>
+			<label class="form-label small mb-1" for="import-status">Status</label>
+			<select class="form-select form-select-sm" id="import-status" name="status">
+				<option value="">Any</option>
+				for _, s := range importStatuses {
+					<option value={ s } selected?={ s == p.Status }>{ statusText(s) }</option>
 				}
-				if p.Offset+len(p.Imports) < p.Total {
-					<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.ListURL(p.Offset+importsPerPage)) }>Older</a>
-				}
-				<span class="small text-body-secondary">{ plural(p.Total, "Import", "Imports") }</span>
-			</div>
+			</select>
+		</div>
+		<button class="btn btn-sm btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i> Filter</button>
+		if p.Status != "" {
+			<a class="btn btn-sm btn-outline-secondary" href="/import?tab=history">Clear</a>
 		}
+	</form>
+	if len(p.Imports) == 0 {
+		if p.Status != "" {
+			<p class="text-body-secondary">No { statusText(p.Status) } Imports.</p>
+		} else {
+			<p class="text-body-secondary">No Imports yet.</p>
+		}
+	} else {
+		<table class="table table-sm align-middle">
+			<thead>
+				<tr><th>Import</th><th>Status</th><th>Paths</th><th>Result</th><th>Started</th></tr>
+			</thead>
+			<tbody>
+				for _, op := range p.Imports {
+					<tr>
+						<td><a href={ templ.URL("/imports/" + string(op.ID)) }>{ string(op.ID) }</a></td>
+						<td><span class={ "badge", importStatusClass(op.Status) }>{ statusText(op.Status) }</span></td>
+						<td class="font-monospace small text-break">
+							for _, path := range op.Request.Paths {
+								<div>{ path }</div>
+							}
+						</td>
+						<td class="small">{ countsText(op) }</td>
+						<td class="small text-nowrap">{ shortTime(op.CreatedAt) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		<div class="d-flex gap-2 align-items-center">
+			if p.Offset > 0 {
+				<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.HistoryURL(max(0, p.Offset-importsPerPage))) }><i class="bi bi-chevron-left" aria-hidden="true"></i> Newer</a>
+			}
+			if p.Offset+len(p.Imports) < p.Total {
+				<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.HistoryURL(p.Offset+importsPerPage)) }>Older <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+			}
+			<span class="small text-body-secondary">{ plural(p.Total, "Import", "Imports") }</span>
+		</div>
 	}
 }
 
@@ -133,7 +174,7 @@ templ importView(op importOp, stale bool) {
 				}
 				if importActive(op.Status) {
 					<form method="post" action={ templ.SafeURL("/imports/" + id + "/abort") } class="ms-auto">
-						<button class="btn btn-sm btn-outline-danger">Abort Import</button>
+						<button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle" aria-hidden="true"></i> Abort Import</button>
 					</form>
 				}
 			</div>
@@ -268,7 +309,7 @@ templ importPromptView(id string, p importPrompt) {
 						<input class="form-control form-control-sm font-monospace" id="search-ids" name="search_ids" placeholder="MusicBrainz or other ids"/>
 					</div>
 					<div class="col-auto">
-						<button class="btn btn-sm btn-outline-primary">Search again</button>
+						<button class="btn btn-sm btn-outline-primary"><i class="bi bi-search" aria-hidden="true"></i> Search again</button>
 					</div>
 				</form>
 			}
@@ -288,7 +329,7 @@ templ candidateView(id string, p importPrompt, c candidate, open bool) {
 			<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="ms-auto">
 				<input type="hidden" name="prompt_id" value={ p.ID }/>
 				<input type="hidden" name="candidate" value={ strconv.Itoa(c.Index) }/>
-				<button class="btn btn-sm btn-primary" name="action" value="apply">Apply</button>
+				<button class="btn btn-sm btn-primary" name="action" value="apply"><i class="bi bi-check-lg" aria-hidden="true"></i> Apply</button>
 			</form>
 		</summary>
 		<div class="px-2 pb-2">
@@ -372,7 +413,7 @@ templ importOutcomes(op importOp) {
 			}
 		</tbody>
 	</table>
-	<a class="small" href={ templ.URL(importAuditURL(op)) }>What this Import changed, in the Audit</a>
+	<a class="small" href={ templ.URL(importAuditURL(op)) }><i class="bi bi-journal-text" aria-hidden="true"></i> What this Import changed, in the Audit</a>
 }
 
 // importRemoveView asks before "Remove old", which deletes files.
@@ -397,7 +438,7 @@ templ importRemoveView(op importOp) {
 		<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="d-flex gap-2">
 			<input type="hidden" name="prompt_id" value={ p.ID }/>
 			<input type="hidden" name="confirm" value="1"/>
-			<button class="btn btn-danger" name="action" value="remove">Remove old and import</button>
+			<button class="btn btn-danger" name="action" value="remove"><i class="bi bi-trash" aria-hidden="true"></i> Remove old and import</button>
 			<a class="btn btn-outline-secondary" href={ templ.URL("/imports/" + id) }>Cancel</a>
 		</form>
 	}

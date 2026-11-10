@@ -23,10 +23,10 @@ templ artTab(p recordPage) {
 						<img class="img-fluid rounded border" src={ artURL(id) } alt={ "Art for " + recordTitle(p) }/>
 					</a>
 					<div class="small text-body-secondary mt-1">
-						{ p.Art.Dims() } · <a href={ templ.URL(artURL(id)) } target="_blank" rel="noopener">Full size</a>
+						{ p.Art.Dims() } · <a href={ templ.URL(artURL(id)) } target="_blank" rel="noopener">Full size <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
 					</div>
 					<div class="small text-body-secondary font-monospace text-break">{ p.Record.Str("artpath") }</div>
-					<a class="btn btn-sm btn-outline-danger mt-2" href={ templ.URL(artURL(id) + "/remove") }>Remove art</a>
+					<a class="btn btn-sm btn-outline-danger mt-2" href={ templ.URL(artURL(id) + "/remove") }><i class="bi bi-trash" aria-hidden="true"></i> Remove art</a>
 				} else {
 					<div class="art-none rounded border d-flex align-items-center justify-content-center text-body-secondary">No art</div>
 				}
@@ -42,7 +42,7 @@ templ artTab(p recordPage) {
 				<div class={ "tab-pane", templ.KV("show active", p.ArtPane == "search") } id="art-search" role="tabpanel">
 					<form class="d-flex gap-2 mb-1" hx-get={ artURL(id) + "/search" } hx-target="#art-results" hx-trigger="submit" hx-indicator="#art-loading">
 						<input class="form-control" type="search" name="q" value={ p.ArtQuery } aria-label="Search for the Album"/>
-						<button class="btn btn-primary">Search</button>
+						<button class="btn btn-primary"><i class="bi bi-search" aria-hidden="true"></i> Search</button>
 					</form>
 					<div class="form-text mb-3">Searches iTunes and Deezer. The closest matches to this Album come first; green marks a track count or year that matches.</div>
 					<div id="art-loading" class="htmx-indicator text-body-secondary small mb-2">
@@ -53,13 +53,13 @@ templ artTab(p recordPage) {
 				<div class={ "tab-pane", templ.KV("show active", p.ArtPane == "url") } id="art-url" role="tabpanel">
 					<form method="post" action={ templ.SafeURL(artURL(id)) } class="d-flex gap-2">
 						<input class="form-control" type="url" name="url" value={ p.ArtURL } placeholder="https://… (JPEG or PNG)" aria-label="Image URL" required/>
-						<button class="btn btn-primary text-nowrap">Set art</button>
+						<button class="btn btn-primary text-nowrap"><i class="bi bi-image" aria-hidden="true"></i> Set art</button>
 					</form>
 				</div>
 				<div class={ "tab-pane", templ.KV("show active", p.ArtPane == "file") } id="art-file" role="tabpanel">
 					<form method="post" action={ templ.SafeURL(artURL(id)) } enctype="multipart/form-data" class="d-flex gap-2">
 						<input class="form-control" type="file" name="file" accept="image/jpeg,image/png" aria-label="Image file" required/>
-						<button class="btn btn-primary text-nowrap">Set art</button>
+						<button class="btn btn-primary text-nowrap"><i class="bi bi-image" aria-hidden="true"></i> Set art</button>
 					</form>
 				</div>
 			</div>
@@ -109,7 +109,7 @@ templ artResults(id int, found []artCandidate, problems []string) {
 						<form method="post" action={ templ.SafeURL(artURL(id)) } class="mt-auto">
 							<input type="hidden" name="url" value={ c.Full }/>
 							<input type="hidden" name="candidate" value="1"/>
-							<button class="btn btn-sm btn-outline-primary w-100">Set art</button>
+							<button class="btn btn-sm btn-outline-primary w-100"><i class="bi bi-image" aria-hidden="true"></i> Set art</button>
 						</form>
 					</div>
 				</div>
@@ -140,7 +140,7 @@ templ artCompareView(p artComparePage) {
 					<img class="img-fluid rounded border art-compare" src={ artURL(id) } alt="Current art"/>
 				</a>
 				<div class="small text-body-secondary mt-1">
-					{ p.Current.Dims() } · <a href={ templ.URL(artURL(id)) } target="_blank" rel="noopener">Full size</a>
+					{ p.Current.Dims() } · <a href={ templ.URL(artURL(id)) } target="_blank" rel="noopener">Full size <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
 				</div>
 			</div>
 			<div class="col-md-6">
@@ -150,13 +150,13 @@ templ artCompareView(p artComparePage) {
 					<img class="img-fluid rounded border art-compare" src={ img } alt="New art"/>
 				</a>
 				<div class="small text-body-secondary mt-1">
-					{ p.New.Dims() } · <a href={ templ.URL(img) } target="_blank" rel="noopener">Full size</a>
+					{ p.New.Dims() } · <a href={ templ.URL(img) } target="_blank" rel="noopener">Full size <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
 				</div>
 				<div class="small text-body-secondary text-break">{ p.Source }</div>
 			</div>
 		</div>
 		<form method="post" action={ templ.SafeURL(artURL(id) + "/new/" + p.Token) } class="d-flex gap-2">
-			<button class="btn btn-primary">Set art</button>
+			<button class="btn btn-primary"><i class="bi bi-image" aria-hidden="true"></i> Set art</button>
 			<a class="btn btn-outline-secondary" href={ templ.URL(recordTabURL(albums, id, "art")) }>Cancel</a>
 		</form>
 	}
@@ -181,12 +181,12 @@ templ artRemoveView(album record, current artInfo) {
 				<img class="img-fluid rounded border" src={ artURL(id) } alt="Current art"/>
 			</a>
 			<div class="small text-body-secondary mt-1">
-				{ current.Dims() } · <a href={ templ.URL(artURL(id)) } target="_blank" rel="noopener">Full size</a>
+				{ current.Dims() } · <a href={ templ.URL(artURL(id)) } target="_blank" rel="noopener">Full size <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
 			</div>
 			<div class="small text-body-secondary font-monospace text-break">{ album.Str("artpath") }</div>
 		</div>
 		<form method="post" action={ templ.SafeURL(artURL(id) + "/remove") } class="d-flex gap-2">
-			<button class="btn btn-danger">Remove art</button>
+			<button class="btn btn-danger"><i class="bi bi-trash" aria-hidden="true"></i> Remove art</button>
 			<a class="btn btn-outline-secondary" href={ templ.URL(recordTabURL(albums, id, "art")) }>Cancel</a>
 		</form>
 	}

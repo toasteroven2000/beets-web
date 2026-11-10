@@ -26,7 +26,7 @@ templ modifyView(p modifyPage) {
 			<h2 class="h6 mt-3">Delete fields</h2>
 			<input class="form-control form-control-sm font-monospace mb-3" name="delete_fields" placeholder="field names, separated by spaces or commas" aria-label="Fields to delete"/>
 			<div class="d-flex gap-2">
-				<button class="btn btn-primary" disabled?={ p.Count == 0 }>Preview changes</button>
+				<button class="btn btn-primary" disabled?={ p.Count == 0 }><i class="bi bi-eye" aria-hidden="true"></i> Preview changes</button>
 				<a href="javascript:history.back()" class="btn btn-outline-secondary">Cancel</a>
 			</div>
 		</form>
@@ -89,7 +89,7 @@ templ outcome(m modification) {
 	switch m.Status {
 		case "awaiting_confirmation":
 			<form method="post" action={ templ.URL("/modifications/" + string(m.ID) + "/confirm") } class="d-flex flex-wrap gap-2 align-items-center mb-3">
-				<button class="btn btn-primary">Confirm { previewCount(m) }</button>
+				<button class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> Confirm { previewCount(m) }</button>
 				<a href="javascript:history.back()" class="btn btn-outline-secondary">Cancel</a>
 				<span class="small text-body-secondary">Nothing changes until you Confirm.</span>
 			</form>
@@ -127,14 +127,14 @@ templ outcome(m modification) {
 					}
 				</ul>
 				<form method="post" action={ templ.URL("/modifications/" + string(m.ID) + "/again") }>
-					<button class="btn btn-primary">Preview again</button>
+					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
 				</form>
 			</div>
 		case "interrupted":
 			<div class="alert alert-warning">
 				beets-api restarted while this was running. { records(len(m.Result.Applied)) } had been applied.
 				<form method="post" action={ templ.URL("/modifications/" + string(m.ID) + "/again") } class="mt-2">
-					<button class="btn btn-primary">Preview again</button>
+					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
 				</form>
 			</div>
 	}
@@ -230,10 +230,10 @@ templ modificationsView(p modificationsPage) {
 			</table>
 			<div class="d-flex gap-2">
 				if p.Offset > 0 {
-					<a class="btn btn-sm btn-outline-secondary" href={ templ.URL("/modifications?offset=" + strconv.Itoa(max(0, p.Offset-50))) }>Newer</a>
+					<a class="btn btn-sm btn-outline-secondary" href={ templ.URL("/modifications?offset=" + strconv.Itoa(max(0, p.Offset-50))) }><i class="bi bi-chevron-left" aria-hidden="true"></i> Newer</a>
 				}
 				if p.Offset+len(p.Mods) < p.Total {
-					<a class="btn btn-sm btn-outline-secondary" href={ templ.URL("/modifications?offset=" + strconv.Itoa(p.Offset+50)) }>Older</a>
+					<a class="btn btn-sm btn-outline-secondary" href={ templ.URL("/modifications?offset=" + strconv.Itoa(p.Offset+50)) }>Older <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
 				}
 			</div>
 		}

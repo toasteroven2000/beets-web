@@ -356,3 +356,11 @@ func TestMissingRecordIs404(t *testing.T) {
 		t.Errorf("art status %d", rec.Code)
 	}
 }
+
+func TestIconsAreServed(t *testing.T) {
+	_, h := newTest(t)
+	mustContain(t, get(t, h, "/"), "bootstrap-icons.min.css?v=", `class="bi bi-disc"`)
+	if rec := get(t, h, "/public/static/fonts/bootstrap-icons.woff2"); rec.Code != 200 || rec.Body.Len() < 100000 {
+		t.Errorf("font: %d, %d bytes", rec.Code, rec.Body.Len())
+	}
+}

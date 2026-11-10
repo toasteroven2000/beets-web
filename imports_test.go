@@ -33,8 +33,8 @@ func TestImportBrowsesImportPaths(t *testing.T) {
 	rec := get(t, h, "/import?path=/in/incoming")
 	mustContain(t, rec,
 		`name="path" value="/in/incoming/Abbey Road"`, // one Import button per folder
-		`name="path" value="/in/incoming">Import this folder`,
-		`href="/import">Up`, "3.0 MB", "copied into the Library; the originals stay")
+		`name="path" value="/in/incoming"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Import this folder`,
+		`href="/import"><i class="bi bi-arrow-up" aria-hidden="true"></i> Up`, "3.0 MB", "copied into the Library; the originals stay")
 	if strings.Contains(rec.Body.String(), `value="/in/incoming/loose.mp3"`) {
 		t.Error("files get an Import button; only folders should")
 	}
@@ -101,29 +101,58 @@ func TestStartImportWhileOneIsActiveLinksToIt(t *testing.T) {
 	mustContain(t, rec, "Import 4 is still active", `href="/imports/4"`, `value="/in/incoming/Abbey Road"`)
 }
 
-func TestImportListShowsTheActiveImport(t *testing.T) {
-	f, h := newTest(t)
-	importPathsRoute(f)
+func importsRoute(f *fakeAPI) {
 	f.routes["GET /imports"] = func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Has("status") {
+		q := r.URL.Query()
+		switch {
+		case len(q["status"]) == 2: // the active Import
 			writeJSON(w, 200, map[string]any{"total": 1, "results": []any{
 				map[string]any{"id": 9, "status": "waiting_for_choice", "request": map[string]any{"paths": []string{"/in/b"}}},
 			}})
-			return
+		case q.Get("status") == "failed":
+			writeJSON(w, 200, map[string]any{"total": 0, "results": []any{}})
+		default:
+			writeJSON(w, 200, map[string]any{"total": 120, "results": []any{
+				map[string]any{"id": 8, "status": "completed", "request": map[string]any{"paths": []string{"/in/a"}}, "created_at": "2026-11-09T09:00:00Z",
+					"counts": map[string]any{"choices": 3, "tasks": 3, "skipped": 1, "items": 24}},
+				map[string]any{"id": 7, "status": "aborted", "request": map[string]any{"paths": []string{"/in/c"}}, "created_at": "2026-11-08T09:00:00Z",
+					"counts": map[string]any{"choices": 1, "tasks": 0, "skipped": 0, "items": 0}},
+			}})
 		}
-		writeJSON(w, 200, map[string]any{"total": 45, "results": []any{
-			map[string]any{"id": 8, "status": "completed", "request": map[string]any{"paths": []string{"/in/a"}}, "created_at": "2026-11-09T09:00:00Z",
-				"counts": map[string]any{"choices": 3, "tasks": 3, "skipped": 1, "items": 24}},
-			map[string]any{"id": 7, "status": "aborted", "request": map[string]any{"paths": []string{"/in/c"}}, "created_at": "2026-11-08T09:00:00Z",
-				"counts": map[string]any{"choices": 1, "tasks": 0, "skipped": 0, "items": 0}},
-		}})
 	}
-	rec := get(t, h, "/import?path=/in/incoming&offset=20")
+}
+
+func TestImportHistoryTab(t *testing.T) {
+	f, h := newTest(t)
+	importsRoute(f)
+	rec := get(t, h, "/import?tab=history&offset=50")
 	mustContain(t, rec, "Import 9 is waiting for choice", `href="/imports/9"`, `href="/imports/8"`, "2026-11-09 09:00",
-		"24 Items imported · 1 of 3 Import Tasks skipped", "Nothing imported", "45 Imports",
-		`href="/import?path=%2Fin%2Fincoming#imports">Newer`, `href="/import?offset=40&amp;path=%2Fin%2Fincoming#imports">Older`)
-	if r, _ := f.last(t, "GET", "/imports"); r.URL.Query().Get("status") == "" {
-		t.Error("the active Import isn't looked up by status")
+		"24 Items imported · 1 of 3 Import Tasks skipped", "Nothing imported", "120 Imports",
+		`aria-current="page" href="/import?tab=history"`, `<span class="badge text-bg-secondary">120</span>`,
+		`href="/import?tab=history"><i class="bi bi-chevron-left" aria-hidden="true"></i> Newer`,
+		`href="/import?offset=100&amp;tab=history">Older`)
+	for _, r := range f.requests {
+		if r.URL.Path == "/import-paths" {
+			t.Error("History tab browsed the Import Paths")
+		}
+	}
+}
+
+func TestImportHistoryFiltersByStatus(t *testing.T) {
+	f, h := newTest(t)
+	importsRoute(f)
+	rec := get(t, h, "/import?tab=history&status=failed")
+	mustContain(t, rec, "No failed Imports.", `<option value="failed" selected>`, `<span class="badge text-bg-secondary">120</span>`, `href="/import?tab=history">Clear`)
+}
+
+func TestImportPathsTabCountsHistory(t *testing.T) {
+	f, h := newTest(t)
+	importPathsRoute(f)
+	importsRoute(f)
+	rec := get(t, h, "/import?path=/in/incoming")
+	mustContain(t, rec, `aria-current="page" href="/import?path=%2Fin%2Fincoming"`, `<span class="badge text-bg-secondary">120</span>`, "Abbey Road")
+	if strings.Contains(rec.Body.String(), "2026-11-09 09:00") {
+		t.Error("Import Paths tab lists the History")
 	}
 }
 

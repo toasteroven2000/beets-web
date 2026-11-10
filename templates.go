@@ -55,7 +55,7 @@ func assetURL(name string) string {
 
 func init() {
 	// Fill the cache before serving, so concurrent requests only read it.
-	for _, name := range []string{"theme.js", "bootstrap.min.css", "app.css", "bootstrap.bundle.min.js", "htmx.min.js", "fields.js"} {
+	for _, name := range []string{"theme.js", "bootstrap.min.css", "bootstrap-icons.min.css", "app.css", "bootstrap.bundle.min.js", "htmx.min.js", "fields.js"} {
 		assetURL(name)
 	}
 }

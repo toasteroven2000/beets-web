@@ -17,8 +17,12 @@ import (
 	"strings"
 )
 
-// importStartPage is the Import Path browser, with the Imports beets-api has run.
+// importStartPage is the Import page: its Import Paths tab browses folders to
+// import, its History tab lists the Imports beets-api has run.
 type importStartPage struct {
+	Tab           string // "paths" or "history"
+	Status        string // History's status filter, "" for any
+	AllTotal      int    // every Import, for the History tab's badge
 	Browse        importBrowse
 	Mode          importMode
 	Imports       []importOp
@@ -49,22 +53,30 @@ func (p importStartPage) UpURL() string {
 	return importBrowseURL(*p.Browse.Parent)
 }
 
-// importsPerPage is how many past Imports the Import page lists at once.
-const importsPerPage = 20
+// importsPerPage is how many past Imports the History tab lists at once.
+const importsPerPage = 50
 
-// ListURL is this page at another offset of the Imports list.
-func (p importStartPage) ListURL(offset int) string {
-	v := url.Values{}
-	if p.Here() != "" {
-		v.Set("path", p.Here())
+// importStatuses are an Import's statuses, for History's filter.
+var importStatuses = []string{"running", "waiting_for_choice", "completed", "aborted", "failed"}
+
+// PathsURL is the Import Paths tab, at the folder being browsed.
+func (p importStartPage) PathsURL() string {
+	if p.Here() == "" {
+		return "/import"
+	}
+	return importBrowseURL(p.Here())
+}
+
+// HistoryURL is the History tab at an offset, keeping its filter.
+func (p importStartPage) HistoryURL(offset int) string {
+	v := url.Values{"tab": {"history"}}
+	if p.Status != "" {
+		v.Set("status", p.Status)
 	}
 	if offset > 0 {
 		v.Set("offset", strconv.Itoa(offset))
 	}
-	if len(v) == 0 {
-		return "/import#imports"
-	}
-	return "/import?" + v.Encode() + "#imports"
+	return "/import?" + v.Encode()
 }
 
 // countsText summarises an Import in the list.
@@ -279,32 +291,49 @@ func outcomeAlbum(o importOutcome) int {
 }
 
 func (s *server) handleImportStart(w http.ResponseWriter, r *http.Request) {
-	p := s.importStartPage(r.Context(), r.URL.Query().Get("path"), offsetParam(r))
+	q := r.URL.Query()
+	tab := "paths"
+	if q.Get("tab") == "history" {
+		tab = "history"
+	}
+	p := s.importStartPage(r.Context(), tab, q.Get("path"), q.Get("status"), offsetParam(r))
 	render(w, http.StatusOK, importStartView(p))
 }
 
-// importStartPage fills the browser; a missing endpoint or a bad path is
+// importStartPage fills one tab of the Import page. Errors from beets-api are
 // shown on the page rather than as an error page.
-func (s *server) importStartPage(ctx context.Context, dir string, offset int) importStartPage {
-	p := importStartPage{Offset: offset}
-	b, err := s.api.ImportPaths(ctx, dir)
-	if err != nil {
-		p.Error = sentence(errorMessage(err))
-		if dir != "" {
-			b, _ = s.api.ImportPaths(ctx, "")
+func (s *server) importStartPage(ctx context.Context, tab, dir, status string, offset int) importStartPage {
+	p := importStartPage{Tab: tab, Status: status, Offset: offset}
+	if tab == "paths" {
+		b, err := s.api.ImportPaths(ctx, dir)
+		if err != nil {
+			p.Error = sentence(errorMessage(err))
+			if dir != "" {
+				b, _ = s.api.ImportPaths(ctx, "")
+			}
+		}
+		p.Browse = b
+		p.NoImportPaths = err == nil && b.Path == nil && len(b.Entries) == 0
+		if cfg, err := s.api.Config(ctx); err == nil {
+			p.Mode = importModeFrom(cfg)
+		}
+	} else {
+		var statuses []string
+		if status != "" {
+			statuses = []string{status}
+		}
+		if list, err := s.api.Imports(ctx, statuses, importsPerPage, offset); err == nil {
+			p.Imports, p.Total = list.Results, list.Total
+		} else {
+			p.Error = sentence(errorMessage(err))
 		}
 	}
-	p.Browse = b
-	p.NoImportPaths = err == nil && b.Path == nil && len(b.Entries) == 0
-	if cfg, err := s.api.Config(ctx); err == nil {
-		p.Mode = importModeFrom(cfg)
+	if status == "" && tab == "history" {
+		p.AllTotal = p.Total
+	} else if all, err := s.api.Imports(ctx, nil, 1, 0); err == nil {
+		p.AllTotal = all.Total
 	}
-	if list, err := s.api.Imports(ctx, nil, importsPerPage, offset); err == nil {
-		p.Imports, p.Total = list.Results, list.Total
-	} else if p.Error == "" {
-		p.Error = sentence(errorMessage(err))
-	}
-	// Only one Import runs at a time; it may be on an earlier page.
+	// Only one Import runs at a time; it may be on a later page, or filtered out.
 	if active, err := s.api.Imports(ctx, []string{"running", "waiting_for_choice"}, 1, 0); err == nil && len(active.Results) > 0 {
 		p.Active = &active.Results[0]
 	}
@@ -333,7 +362,7 @@ func (s *server) handleCreateImport(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	p := s.importStartPage(r.Context(), here, 0)
+	p := s.importStartPage(r.Context(), "paths", here, "", 0)
 	if m := activeImport.FindStringSubmatch(e.Detail); m != nil {
 		p.ActiveID = m[1]
 		p.Error = fmt.Sprintf("Import %s is still active: finish or abort it first.", m[1])

@@ -36,7 +36,7 @@ Without devenv: `go generate ./... && go run . -api http://127.0.0.1:8338`.
 | `templates.go`  | Rendering and the embedded static assets                               |
 | `*.templ`       | HTML views, as [templ](https://templ.guide) components                 |
 | `*_templ.go`    | Generated from the `.templ` files; not committed                       |
-| `static/*`      | Bootstrap 5.3.8 and htmx 2.0.4 (vendored, unmodified), theme switcher, stylesheet |
+| `static/*`      | Bootstrap 5.3.8, Bootstrap Icons 1.13.1 (CSS and woff2 font) and htmx 2.0.4 (vendored, unmodified), theme switcher, stylesheet |
 
 The `*_templ.go` files are not committed. Run `go generate ./...` before `go build` or `go test`; CI does the same. Static assets are compiled into the binary.
 
@@ -55,6 +55,6 @@ The Art tab searches the iTunes Search API and the Deezer API (no keys), and fet
 
 ## Import
 
-The Import page browses beets-api's Import Paths (`GET /import-paths`, set with `BEETS_API_IMPORT_PATHS`) and imports one folder at a time. beets-ui never reads the files itself, so it needs no access to them. Whether files are copied or moved is beets' `import` config; the page says which before you start, and warns when the originals will be deleted. While beets works the Import page polls every second; when beets needs a Choice it shows the Candidates with their field changes, and the album, item or duplicate choices beets offers. "Remove old" on a duplicate deletes the existing files, so it asks first.
+The Import page has two tabs. Import Paths browses beets-api's Import Paths (`GET /import-paths`, set with `BEETS_API_IMPORT_PATHS`) and imports one folder at a time; History lists past Imports, filterable by status. beets-ui never reads the files itself, so it needs no access to them. Whether files are copied or moved is beets' `import` config; the page says which before you start, and warns when the originals will be deleted. While beets works the Import page polls every second; when beets needs a Choice it shows the Candidates with their field changes, and the album, item or duplicate choices beets offers. "Remove old" on a duplicate deletes the existing files, so it asks first.
 
 beets-api only accepts `Host: 127.0.0.1` or `localhost`, so beets-ui in another container can't reach it yet (beets-api `.scratch/imports/issues/02-allowed-hosts.md`).
