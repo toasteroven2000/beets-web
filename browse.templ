@@ -172,12 +172,31 @@ templ filterForm(p listPage) {
 	</form>
 }
 
-// homeView is the home page: a search bar and nothing else.
-templ homeView() {
+// homeView is the home page: a search bar, then the recently added Albums.
+templ homeView(recent []record) {
 	@layout("Search", "Home") {
 		<form method="get" action="/search" role="search" class="home-search mx-auto">
 			<input class="form-control form-control-lg font-monospace" type="search" name="q" placeholder="Search the Library" aria-label="Search the Library" autofocus/>
 		</form>
+		if len(recent) > 0 {
+			<section class="home-recent mx-auto mt-5">
+				<div class="d-flex justify-content-between align-items-baseline mb-2">
+					<h2 class="h5">Recently added</h2>
+					<a class="small" href={ templ.URL(listURL(albums, filters{}, true)) }>See all Albums</a>
+				</div>
+				<div class="row row-cols-3 row-cols-md-4 row-cols-lg-6 g-3">
+					for _, a := range recent {
+						<div class="col">
+							<a class="d-block text-decoration-none" href={ templ.URL(recordURL(albums, a.ID())) }>
+								<img class="recent-art rounded border w-100" src={ "/albums/" + strconv.Itoa(a.ID()) + "/art" } alt="" loading="lazy" onerror="this.style.visibility='hidden'"/>
+								<div class="small fw-semibold text-truncate mt-1">{ orDash(a.Str("album")) }</div>
+								<div class="small text-body-secondary text-truncate">{ a.Str("albumartist") }</div>
+							</a>
+						</div>
+					}
+				</div>
+			</section>
+		}
 	}
 }
 

@@ -9,7 +9,9 @@
 .preview-table del { color: var(--bs-danger-text-emphasis); }
 .preview-table ins { color: var(--bs-success-text-emphasis); text-decoration: none; }
 .preview-table del:empty::before, .preview-table ins:empty::before { content: "(empty)"; font-style: italic; opacity: .6; }
-.home-search { max-width: 40rem; margin-top: 25vh; }
+.home-search { max-width: 40rem; margin-top: 12vh; }
+.home-recent { max-width: 60rem; }
+.recent-art { aspect-ratio: 1; object-fit: cover; background: var(--bs-secondary-bg); }
 .field-toolbar { position: sticky; top: 0; z-index: 5; background: var(--bs-body-bg); }
 .field-filter { max-width: 16rem; }
 .field-col { width: 30%; }

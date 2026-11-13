@@ -109,6 +109,29 @@ func TestHomeIsOnlyASearchBar(t *testing.T) {
 	}
 }
 
+func TestHomeListsRecentlyAddedAlbums(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["GET /list"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"total": 1, "results": []any{
+			map[string]any{"id": 7, "album": "Let It Be", "albumartist": "The Beatles"},
+		}})
+	}
+	mustContain(t, get(t, h, "/"), "Recently added", `href="/albums/7"`, `src="/albums/7/art"`, "Let It Be", "The Beatles")
+	req, _ := f.last(t, "GET", "/list")
+	q := req.URL.Query()
+	if q.Get("scope") != "album" || !strings.Contains(q.Get("query"), "added-") || q.Get("limit") != "12" {
+		t.Errorf("list request %v", q)
+	}
+}
+
+func TestHomeWithoutAlbumsOmitsRecent(t *testing.T) {
+	_, h := newTest(t)
+	rec := get(t, h, "/")
+	if strings.Contains(rec.Body.String(), "Recently added") {
+		t.Error("empty Library shows a Recently added section")
+	}
+}
+
 func TestArtistsWithoutEndpointSaysSo(t *testing.T) {
 	_, h := newTest(t)
 	rec := get(t, h, "/artists")

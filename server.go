@@ -235,8 +235,17 @@ func (s *server) handleList(k scope) http.HandlerFunc {
 	}
 }
 
+// recentAlbumCount is how many recently added Albums the home page shows.
+const recentAlbumCount = 12
+
+// handleHome shows the search bar and the newest Albums. The page works
+// without them: if beets-api can't list Albums, only the search bar shows.
 func (s *server) handleHome(w http.ResponseWriter, r *http.Request) {
-	render(w, http.StatusOK, homeView())
+	res, err := s.api.List(r.Context(), albums, withSort("", albums, true), recentAlbumCount, 0, listFields[albums])
+	if err != nil {
+		log.Printf("home: recent albums: %v", err)
+	}
+	render(w, http.StatusOK, homeView(res.Results))
 }
 
 func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
