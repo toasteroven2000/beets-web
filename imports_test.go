@@ -80,8 +80,8 @@ func TestStartImportOfOneFolder(t *testing.T) {
 	if len(got.Paths) != 1 || got.Paths[0] != "/in/a" || !got.Singletons {
 		t.Errorf("body %s", body)
 	}
-	if r.Header.Get("X-Client") != "beets-ui" {
-		t.Error("no X-Client")
+	if r.Header.Get("X-Beets-API-Client") != "beets-ui" {
+		t.Error("no X-Beets-API-Client")
 	}
 }
 

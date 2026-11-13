@@ -29,12 +29,16 @@ templ auditView(p auditPage) {
 						}
 					</select>
 				</div>
+				<div class="col-sm-3 col-md-2">
+					<label class="form-label small mb-1" for="audit-actor">Actor</label>
+					<input class="form-control form-control-sm" id="audit-actor" name="actor" value={ p.Actor } placeholder="anyone"/>
+				</div>
 				<div class="col-auto d-flex gap-2">
 					if p.Operation > 0 {
 						<input type="hidden" name="operation" value={ strconv.Itoa(p.Operation) }/>
 					}
 					<button class="btn btn-sm btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i> Filter</button>
-					if p.Target != "" || p.Action != "" || p.Operation > 0 {
+					if p.Target != "" || p.Action != "" || p.Actor != "" || p.Operation > 0 {
 						<a class="btn btn-sm btn-outline-secondary" href="/audit">Clear</a>
 					}
 				</div>
@@ -48,7 +52,7 @@ templ auditView(p auditPage) {
 				<div class="table-responsive">
 					<table class="table table-sm align-middle audit-table">
 						<thead>
-							<tr><th>When</th><th>Action</th><th>Target</th><th>Client</th><th>Changes</th></tr>
+							<tr><th>When</th><th>Action</th><th>Target</th><th>Actor</th><th>Client</th><th>Changes</th></tr>
 						</thead>
 						<tbody>
 							for _, e := range p.Entries {
@@ -73,6 +77,7 @@ templ auditView(p auditPage) {
 											<span class="font-monospace small">{ e.Target }</span>
 										}
 									</td>
+									<td class="small">{ orDash(e.Actor) }</td>
 									<td class="small">{ orDash(e.Client) }</td>
 									<td class="small">
 										for _, c := range auditChanges(e.Changes) {

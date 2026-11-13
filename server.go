@@ -1,7 +1,7 @@
 package main
 
-// The server and its routes. There is no auth: it is for one person on one
-// machine, and listens on 127.0.0.1 unless told otherwise.
+// The server and its routes. It signs nobody in: a reverse proxy does, and
+// every request must say who it is from (see auth.go).
 
 import (
 	"context"
@@ -19,13 +19,14 @@ import (
 const pageSize = 100
 
 type server struct {
-	api     *beetsAPI
-	art     *artSearch
-	pending pendingArt
+	api         *beetsAPI
+	art         *artSearch
+	pending     pendingArt
+	actorHeader string // the header the proxy puts the person's name in
 }
 
 func newServer(apiURL string, client *http.Client) *server {
-	return &server{api: &beetsAPI{base: strings.TrimRight(apiURL, "/"), http: client}, art: newArtSearch()}
+	return &server{api: &beetsAPI{base: strings.TrimRight(apiURL, "/"), http: client}, art: newArtSearch(), actorHeader: defaultActorHeader}
 }
 
 func (s *server) routes() http.Handler {
@@ -51,6 +52,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /modifications", s.handleCreateModification)
 	mux.HandleFunc("GET /modifications", s.handleModifications)
 	mux.HandleFunc("GET /audit", s.handleAudit)
+	mux.HandleFunc("GET /profile", s.handleProfile)
 	mux.HandleFunc("GET /modifications/{id}", s.handleModification)
 	mux.HandleFunc("POST /modifications/{id}/confirm", s.handleConfirm)
 	mux.HandleFunc("POST /modifications/{id}/again", s.handleAgain)
@@ -61,7 +63,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /imports/{id}/abort", s.handleImportAbort)
 	mux.HandleFunc("GET /imports/{id}/undo", s.handleImportUndo)
 	mux.HandleFunc("POST /imports/{id}/undo", s.handleImportUndoConfirm)
-	return mux
+	return s.requireActor(mux)
 }
 
 // fail shows an error page; a 404 from beets-api stays a 404.
@@ -509,7 +511,7 @@ func (s *server) handleModifications(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	p := auditPage{Target: strings.TrimSpace(q.Get("target")), Action: q.Get("action"), Offset: offsetParam(r)}
+	p := auditPage{Target: strings.TrimSpace(q.Get("target")), Action: q.Get("action"), Actor: strings.TrimSpace(q.Get("actor")), Offset: offsetParam(r)}
 	if n, err := strconv.Atoi(q.Get("operation")); err == nil && n > 0 {
 		p.Operation = n
 	}
@@ -517,7 +519,7 @@ func (s *server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	if p.Action != "" {
 		actions = []string{p.Action}
 	}
-	res, err := s.api.Audit(r.Context(), p.Target, actions, p.Operation, 50, p.Offset)
+	res, err := s.api.Audit(r.Context(), p.Target, actions, p.Operation, p.Actor, 50, p.Offset)
 	if isStatus(err, http.StatusNotFound) || isStatus(err, http.StatusMethodNotAllowed) {
 		p.Unavailable = true
 	} else if err != nil {

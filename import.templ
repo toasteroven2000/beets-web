@@ -184,6 +184,9 @@ templ importView(op importOp, stale, noSources bool, mode importMode) {
 					<div>{ path }</div>
 				}
 			</div>
+			if op.Result.Actor != nil && *op.Result.Actor != "" {
+				<div class="small text-body-secondary mb-3">Started by { *op.Result.Actor }</div>
+			}
 			if stale {
 				<div class="alert alert-info py-2">That prompt had already moved on; this is where the Import is now.</div>
 			}
@@ -211,6 +214,9 @@ templ importView(op importOp, stale, noSources bool, mode importMode) {
 					for _, c := range op.Result.Choices {
 						<li>
 							{ choiceText(c) }
+							if c.Actor != nil && *c.Actor != "" {
+								<span class="text-body-secondary">by { *c.Actor }</span>
+							}
 							<span class="font-monospace text-body-secondary text-break">
 								for i, path := range c.Paths {
 									if i > 0 {

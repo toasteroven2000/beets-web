@@ -295,6 +295,7 @@ type auditPage struct {
 	Offset      int
 	Target      string // e.g. album:5
 	Action      string
+	Actor       string
 	Operation   int  // a Modification's or Import's id, 0 for any
 	Unavailable bool // beets-api has no GET /audit yet
 }
@@ -332,6 +333,9 @@ func (p auditPage) URL(offset int) string {
 	}
 	if p.Action != "" {
 		v.Set("action", p.Action)
+	}
+	if p.Actor != "" {
+		v.Set("actor", p.Actor)
 	}
 	if p.Operation > 0 {
 		v.Set("operation", strconv.Itoa(p.Operation))

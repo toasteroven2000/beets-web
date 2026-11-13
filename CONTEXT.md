@@ -88,9 +88,13 @@ The append-only record beets-api keeps of every change it made to the Library. P
 _Avoid_: History, log
 
 **Audit entry**:
-One change to one Album or Item (including its art): when, by which Client, what changed, and the Modification or Import that caused it.
+One change to one Album or Item (including its art): when, by which Client and Actor, what changed, and the Modification or Import that caused it.
 _Avoid_: Event, revision
 
 **Client**:
-The name a caller of beets-api gives itself; this UI is `beets-ui`. A label, not proof.
-_Avoid_: User, actor
+The program calling beets-api, as it names itself; this UI is `beets-ui`. A label, not proof.
+_Avoid_: User, caller
+
+**Actor**:
+The person using the UI, as the proxy in front of it says (from the `Remote-User` header by default). beets-ui passes it to beets-api, which records it on each Audit entry and each Choice of an Import. Not proof either: it holds only while the proxy is the one way in.
+_Avoid_: User, account, Client

@@ -60,12 +60,23 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// signedIn is the proxy: it sends the Actor header, which beets-ui requires, unless
+// a request asks to be anonymous or sets one itself.
+func signedIn(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Remote-User") == "" && r.Header.Get("X-Test-Anonymous") == "" {
+			r.Header.Set("Remote-User", "alex")
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
 func newTest(t *testing.T) (*fakeAPI, http.Handler) {
 	t.Helper()
 	f := &fakeAPI{routes: map[string]func(http.ResponseWriter, *http.Request){}}
 	api := httptest.NewServer(f)
 	t.Cleanup(api.Close)
-	return f, newServer(api.URL, api.Client()).routes()
+	return f, signedIn(newServer(api.URL, api.Client()).routes())
 }
 
 func get(t *testing.T, h http.Handler, path string, headers ...string) *httptest.ResponseRecorder {
@@ -79,10 +90,13 @@ func get(t *testing.T, h http.Handler, path string, headers ...string) *httptest
 	return rec
 }
 
-func post(t *testing.T, h http.Handler, path string, form url.Values) *httptest.ResponseRecorder {
+func post(t *testing.T, h http.Handler, path string, form url.Values, headers ...string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest("POST", path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for i := 0; i+1 < len(headers); i += 2 {
+		req.Header.Set(headers[i], headers[i+1])
+	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec

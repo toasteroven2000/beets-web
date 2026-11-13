@@ -31,7 +31,7 @@ func newArtTest(t *testing.T, web http.HandlerFunc) (*fakeAPI, http.Handler, str
 	s := newServer(api.URL, api.Client())
 	s.art.itunes = ws.URL + "/itunes"
 	s.art.deezer = ws.URL + "/deezer"
-	return f, s.routes(), ws.URL
+	return f, signedIn(s.routes()), ws.URL
 }
 
 func album(artpath any) func(http.ResponseWriter, *http.Request) {
@@ -116,7 +116,7 @@ func TestSetArtWithoutArtSetsItStraightAway(t *testing.T) {
 		t.Fatalf("status %d location %q", rec.Code, rec.Header().Get("Location"))
 	}
 	r, body := f.last(t, "PUT", "/albums/2/art")
-	if body != string(img) || r.Header.Get("Content-Type") != "image/png" || r.Header.Get("X-Client") != "beets-ui" {
+	if body != string(img) || r.Header.Get("Content-Type") != "image/png" || r.Header.Get("X-Beets-API-Client") != "beets-ui" {
 		t.Errorf("PUT %q %d bytes", r.Header.Get("Content-Type"), len(body))
 	}
 }
@@ -251,8 +251,8 @@ func TestRemoveArtAsksFirst(t *testing.T) {
 	if rec.Header().Get("Location") != "/albums/2?tab=art&removed=1" {
 		t.Fatalf("went to %q", rec.Header().Get("Location"))
 	}
-	if r, _ := f.last(t, "DELETE", "/albums/2/art"); r.Header.Get("X-Client") != "beets-ui" {
-		t.Errorf("X-Client %q", r.Header.Get("X-Client"))
+	if r, _ := f.last(t, "DELETE", "/albums/2/art"); r.Header.Get("X-Beets-API-Client") != "beets-ui" {
+		t.Errorf("X-Beets-API-Client %q", r.Header.Get("X-Beets-API-Client"))
 	}
 	mustContain(t, get(t, h, "/albums/2?tab=art&removed=1"), "Art removed.")
 }

@@ -179,6 +179,7 @@ type auditEntry struct {
 	ID          int            `json:"id"`
 	At          string         `json:"at"`
 	Client      string         `json:"client"`
+	Actor       string         `json:"actor"`  // the person the Client acted for
 	Action      string         `json:"action"` // e.g. album.modify, art.upload
 	Target      string         `json:"target"` // e.g. album:5
 	OperationID *int           `json:"operation_id"`
@@ -210,9 +211,18 @@ type beetsAPI struct {
 	http *http.Client
 }
 
-// clientName is sent as X-Client, so beets-api's audit shows which changes
-// came through the UI.
+// clientName is sent as X-Beets-API-Client, so beets-api's audit shows which
+// changes came through the UI.
 const clientName = "beets-ui"
+
+// stamp says who is calling beets-api: this program, and the person it acts
+// for, whose name beets-api records in its Audit.
+func stamp(ctx context.Context, req *http.Request) {
+	req.Header.Set("X-Beets-API-Client", clientName)
+	if who := currentUser(ctx); who.Actor != "" {
+		req.Header.Set("X-Beets-API-Actor", who.Actor)
+	}
+}
 
 func (c *beetsAPI) do(ctx context.Context, method, path string, query url.Values, body, out any) error {
 	u := c.base + path
@@ -234,7 +244,7 @@ func (c *beetsAPI) do(ctx context.Context, method, path string, query url.Values
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("X-Client", clientName)
+	stamp(ctx, req)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("beets-api unreachable: %w", err)
@@ -383,7 +393,7 @@ func (c *beetsAPI) SetAlbumArt(ctx context.Context, id int, data []byte) error {
 	if t, ok := imageType(data); ok {
 		req.Header.Set("Content-Type", t)
 	}
-	req.Header.Set("X-Client", clientName)
+	stamp(ctx, req)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("beets-api unreachable: %w", err)
@@ -403,13 +413,16 @@ func (c *beetsAPI) RemoveAlbumArt(ctx context.Context, id int) error {
 
 // Audit lists changes newest first, optionally for one target ("album:5"),
 // some actions, or one Modification or Import (operation > 0).
-func (c *beetsAPI) Audit(ctx context.Context, target string, actions []string, operation, limit, offset int) (auditList, error) {
+func (c *beetsAPI) Audit(ctx context.Context, target string, actions []string, operation int, actor string, limit, offset int) (auditList, error) {
 	v := url.Values{"limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}
 	if target != "" {
 		v.Set("target", target)
 	}
 	if operation > 0 {
 		v.Set("operation_id", strconv.Itoa(operation))
+	}
+	if actor != "" {
+		v.Set("actor", actor)
 	}
 	for _, a := range actions {
 		v.Add("action", a)
@@ -487,6 +500,7 @@ type importChoice struct {
 	Artist    *string  `json:"artist"`
 	Name      *string  `json:"name"`
 	SearchIDs []string `json:"search_ids"`
+	Actor     *string  `json:"actor"` // who gave this Choice
 }
 
 // importOutcome is what became of one Import Task.
@@ -501,6 +515,7 @@ type importResult struct {
 	Choices  []importChoice  `json:"choices"`
 	Outcomes []importOutcome `json:"outcomes"`
 	Error    string          `json:"error"`
+	Actor    *string         `json:"actor"` // who started the Import
 	Undone   *struct {
 		At string `json:"at"`
 	} `json:"undone"` // set once the Import has been undone

@@ -1,0 +1,45 @@
+package main
+
+// profileView shows the identity headers the proxy sent, and which one
+// beets-api records as the Actor of this person's changes.
+templ profileView(who identity) {
+	@layout("Profile", "Profile") {
+		@pageHeader("Profile", "What the proxy told beets-ui about you") {
+		}
+		<table class="table table-sm align-middle w-auto">
+			<thead>
+				<tr><th>Header</th><th>Value</th><th></th></tr>
+			</thead>
+			<tbody>
+				for _, h := range profileHeaders(who) {
+					<tr>
+						<th class="fw-normal font-monospace">{ h }</th>
+						<td>
+							if v := who.Header(h); v == "" {
+								<span class="text-body-secondary">not sent</span>
+							} else if h == "Remote-Groups" {
+								for _, g := range who.Groups {
+									<span class="badge text-bg-secondary me-1">{ g }</span>
+								}
+							} else {
+								{ v }
+							}
+						</td>
+						<td>
+							if h == who.ActorHeader {
+								<span class="badge text-bg-primary">Actor</span>
+							}
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		<p class="mb-1">
+			Changes you make are recorded in beets-api's Audit as <strong>{ who.Actor }</strong>, from the
+			<code>{ who.ActorHeader }</code> header.
+		</p>
+		<p class="small text-body-secondary">
+			Which header that is comes from beets-ui's <code>BEETS_UI_ACTOR_HEADER</code> setting. Groups are shown but not used: beets-ui lets everyone Authelia admits do everything.
+		</p>
+	}
+}

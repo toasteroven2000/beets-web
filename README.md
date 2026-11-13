@@ -1,6 +1,6 @@
 # beets-ui
 
-A web UI for browsing a beets Library and Modifying it, through [beets-api](../beets-api). It is modelled on beets-flask's library browser, with Modify added. It's for one person on one machine, so there's no auth and it listens on 127.0.0.1.
+A web UI for browsing a beets Library and Modifying it, through [beets-api](../beets-api). It is modelled on beets-flask's library browser, with Modify added. It signs nobody in: a reverse proxy does, and every request must say who it is from (see [Who is making a change](#who-is-making-a-change)). It listens on 127.0.0.1 unless told otherwise.
 
 Domain language is in [CONTEXT.md](CONTEXT.md) (shared with beets-api), and decisions are in [docs/adr](docs/adr). The v1 spec is [.scratch/ui-v1/spec.md](.scratch/ui-v1/spec.md).
 
@@ -19,8 +19,9 @@ Without devenv: `go generate ./... && go run . -api http://127.0.0.1:8338`.
 
 | Flag      | Default                 | Meaning                                         |
 | --------- | ----------------------- | ----------------------------------------------- |
-| `-listen` | `127.0.0.1:8339`        | Listen address. There's no auth, so keep it local. |
+| `-listen` | `127.0.0.1:8339`        | Listen address. Reach it only through the proxy that signs people in. |
 | `-api`    | `http://127.0.0.1:8338` | beets-api base URL                              |
+| `-actor-header` (`BEETS_UI_ACTOR_HEADER`) | `Remote-User` | The request header that names the person making it, which beets-api records as the Actor. A request without it gets a 401. |
 
 ## Layout
 
@@ -51,7 +52,7 @@ These features need endpoints that beets-api doesn't have yet. Until they exist,
 
 ## Album art
 
-The Art tab searches the iTunes Search API and the Deezer API (no keys), and fetches images from URLs you enter, so beets-ui needs outbound HTTPS. Set art sends the image to beets-api's `PUT /albums/{id}/art`, which saves it as `cover.jpg` or `cover.png`; Remove art calls `DELETE /albums/{id}/art`. beets-api archives replaced and removed art. Every request carries `X-Client: beets-ui`, so beets-api's audit shows which changes came from the UI. When an Album already has art, the UI shows the current and new art side by side first; the fetched image waits in memory for up to an hour.
+The Art tab searches the iTunes Search API and the Deezer API (no keys), and fetches images from URLs you enter, so beets-ui needs outbound HTTPS. Set art sends the image to beets-api's `PUT /albums/{id}/art`, which saves it as `cover.jpg` or `cover.png`; Remove art calls `DELETE /albums/{id}/art`. beets-api archives replaced and removed art. Every request carries `X-Beets-API-Client: beets-ui`, so beets-api's audit shows which changes came from the UI. When an Album already has art, the UI shows the current and new art side by side first; the fetched image waits in memory for up to an hour.
 
 ## Import
 
@@ -60,3 +61,13 @@ The Import page has two tabs. Import Paths browses beets-api's Import Paths (`GE
 A finished Import has an "Undo this Import…" button (`GET` and `POST /imports/{id}/undo` in beets-api). It previews what would be removed and asks before deleting the copied files. beets-api only allows it for an Import that copied its files, when nothing it made has changed since, so otherwise the page lists the reasons.
 
 beets-api only accepts `Host: 127.0.0.1` or `localhost`, so beets-ui in another container can't reach it yet (beets-api `.scratch/imports/issues/02-allowed-hosts.md`).
+
+## Who is making a change
+
+beets-ui has no login of its own. Put it behind a reverse proxy that signs people in, such as Traefik with Authelia, which sends the person's name in headers (`Remote-User`, `Remote-Name`, `Remote-Email`, `Remote-Groups`). beets-ui requires the header named by `-actor-header` (default `Remote-User`) on every request and answers `401` without it, so nothing is written without saying who wrote it. It sends that name to beets-api as `X-Beets-API-Actor`, and beets-api records it on each Audit entry and each Choice of an Import. Authorization isn't done: everyone the proxy admits can do everything, and `Remote-Groups` is only shown.
+
+`GET /ping` answers `200 ok` without the header, for health checks. It doesn't call beets-api.
+
+The headers are only trustworthy when the proxy is the only way to reach beets-ui, since anything that connects directly can send them itself. Don't publish beets-ui's port. Likewise only beets-ui should be able to reach beets-api, which trusts the Actor it is sent.
+
+In development, add the header with a browser extension. The person's menu (their name, top right) holds Profile, which shows the headers beets-ui received and which one is the Actor, then Modifications and the Audit.

@@ -63,9 +63,13 @@ func init() {
 // render writes a page. Errors are logged rather than returned: by this point
 // the response has usually started.
 func render(w http.ResponseWriter, status int, page templ.Component) {
+	ctx := context.Background()
+	if iw, ok := w.(identityWriter); ok { // the layout shows who is signed in
+		ctx = withIdentity(ctx, iw.who)
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	if err := page.Render(context.Background(), w); err != nil {
+	if err := page.Render(ctx, w); err != nil {
 		log.Printf("render: %v", err)
 	}
 }
