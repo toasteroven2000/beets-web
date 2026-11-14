@@ -10,9 +10,9 @@ func TestAuditListsChanges(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /audit"] = func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"total": 2, "limit": 50, "offset": 0, "results": []any{
-			map[string]any{"id": 2, "at": "2026-11-09T22:40:00Z", "client": "beets-ui", "action": "album.modify", "target": "album:5", "operation_id": 7,
+			map[string]any{"id": 2, "recorded_at": "2026-11-09T22:40:00Z", "client": "beets-ui", "action": "album.modify", "target": "album:5", "operation_id": 7,
 				"changes": map[string]any{"year": map[string]any{"old": 1969, "new": 1970}}},
-			map[string]any{"id": 1, "at": "2026-11-09T22:39:00Z", "client": nil, "action": "art.remove", "target": "album:5", "operation_id": nil,
+			map[string]any{"id": 1, "recorded_at": "2026-11-09T22:39:00Z", "client": nil, "action": "art.remove", "target": "album:5", "operation_id": nil,
 				"changes": map[string]any{"artpath": map[string]any{"old": "/m/cover.jpg", "new": nil}, "archived": []any{3}}},
 		}})
 	}

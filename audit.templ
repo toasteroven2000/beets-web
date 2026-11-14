@@ -52,7 +52,7 @@ templ auditView(p auditPage) {
 					<tbody>
 						for _, e := range p.Entries {
 							<tr>
-								<td class="small text-nowrap">{ e.At }</td>
+								<td class="small text-nowrap">{ e.RecordedAt }</td>
 								<td>
 									<code>{ e.Action }</code>
 									if e.OperationID != nil {

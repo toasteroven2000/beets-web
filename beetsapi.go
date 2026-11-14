@@ -175,7 +175,7 @@ type modList struct {
 // auditEntry is one change beets-api made to one Album or Item.
 type auditEntry struct {
 	ID          int            `json:"id"`
-	At          string         `json:"at"`
+	RecordedAt  string         `json:"recorded_at"`
 	Client      string         `json:"client"`
 	Actor       string         `json:"actor"`  // the person the Client acted for
 	Action      string         `json:"action"` // e.g. album.modify, art.upload
@@ -625,10 +625,10 @@ type undoItem struct {
 
 // undoChange is a later Audit entry for something the Import added.
 type undoChange struct {
-	ID     int    `json:"id"`
-	At     string `json:"at"`
-	Action string `json:"action"`
-	Target string `json:"target"`
+	ID         int    `json:"id"`
+	RecordedAt string `json:"recorded_at"`
+	Action     string `json:"action"`
+	Target     string `json:"target"`
 }
 
 func (c *beetsAPI) UndoPreview(ctx context.Context, id string) (undoPlan, error) {

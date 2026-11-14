@@ -384,7 +384,7 @@ func TestUndoPreviewExplainsWhyItCannotBeUndone(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"import_id": 7, "mode": "copy", "allowed": false,
 			"reasons": []string{"1 later changes were made to what the Import added"},
 			"albums":  []any{}, "items": []any{},
-			"changes_since": []any{map[string]any{"id": 9, "at": "2026-11-10T08:00:00+00:00", "action": "album.modify", "target": "album:3"}}})
+			"changes_since": []any{map[string]any{"id": 9, "recorded_at": "2026-11-10T08:00:00+00:00", "action": "album.modify", "target": "album:3"}}})
 	}
 	rec := get(t, h, "/imports/7/undo")
 	mustContain(t, rec, "can&#39;t be undone", "1 later changes were made", "album.modify", `href="/albums/3"`, `href="/audit?operation=7"`)
@@ -417,7 +417,7 @@ func TestAuditFiltersByImport(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /audit"] = func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"total": 1, "results": []any{
-			map[string]any{"id": 1, "at": "now", "action": "album.import", "target": "album:3", "operation_id": 7, "changes": map[string]any{}},
+			map[string]any{"id": 1, "recorded_at": "now", "action": "album.import", "target": "album:3", "operation_id": 7, "changes": map[string]any{}},
 		}})
 	}
 	rec := get(t, h, "/audit?operation=7")

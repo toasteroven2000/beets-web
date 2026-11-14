@@ -524,7 +524,7 @@ templ importUndoView(op importOp, plan undoPlan) {
 			<p class="small">Changed since the Import:</p>
 			<ul class="small">
 				for _, c := range plan.ChangesSince {
-					<li><code>{ c.Action }</code> <a href={ templ.URL(targetURL(c.Target)) }>{ c.Target }</a> <span class="text-body-secondary">{ c.At }</span></li>
+					<li><code>{ c.Action }</code> <a href={ templ.URL(targetURL(c.Target)) }>{ c.Target }</a> <span class="text-body-secondary">{ c.RecordedAt }</span></li>
 				}
 			</ul>
 			<p class="small"><a href={ templ.URL(importAuditURL(op)) }>The Import in the Audit</a></p>
