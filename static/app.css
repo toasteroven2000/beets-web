@@ -2,7 +2,8 @@
 [data-bs-theme=dark] { color-scheme: dark; }
 
 .select-col { width: 2rem; }
-.album-art { width: 160px; height: 160px; object-fit: cover; }
+.album-cover { width: 100%; max-width: 260px; aspect-ratio: 1; object-fit: cover; }
+.album-side { top: 1rem; }
 .artist-search { max-width: 28rem; }
 
 .preview-table .field-col { width: 12rem; }
@@ -49,3 +50,11 @@
 .delta-table td, .delta-table th { padding-top: .1rem; padding-bottom: .1rem; }
 .track-num { width: 2.5rem; }
 .track-length { width: 3.5rem; }
+/* Each disc is its own table, so fix the widths for the columns to line up. */
+.disc-table { table-layout: fixed; min-width: 36rem; }
+.disc-table .select-col { width: 2rem; }
+.disc-table .track-col { width: 3rem; }
+.disc-table .length-col { width: 5rem; }
+.disc-table .format-col { width: 11rem; }
+.disc-table td { overflow-wrap: anywhere; }
+.missing-track > * { background: var(--bs-tertiary-bg) !important; }

@@ -138,7 +138,7 @@ func nextURL(r *http.Request, res listResult) string {
 
 var listFields = map[scope][]string{
 	albums: {"id", "albumartist", "album", "year", "albumtype", "added"},
-	items:  {"id", "artist", "title", "album", "album_id", "track", "disc", "length", "year", "added"},
+	items:  {"id", "artist", "title", "album", "album_id", "track", "tracktotal", "disc", "disctitle", "length", "format", "bitrate", "trackdisambig", "year", "added"},
 }
 
 func (s *server) table(r *http.Request, k scope, query string, recent bool) (tableData, error) {
@@ -327,6 +327,9 @@ func (s *server) recordPage(ctx context.Context, k scope, id int, tab string) (r
 			return recordPage{}, err
 		}
 		p.Items = tableData{Scope: items, Query: "album_id:" + strconv.Itoa(id), Rows: res.Results, Total: res.Total, Separators: p.Separators}
+		p.Items.Discs = discTables(res.Results)
+		p.Info = albumInfoOf(rec, res.Results, p.Items.Discs)
+		p.Items.ShowArtist = p.Info.ShowArtist
 		if p.Tab == "art" {
 			p.Art = s.currentArt(ctx, id)
 			p.ArtQuery = strings.TrimSpace(rec.Str("albumartist") + " " + rec.Str("album"))

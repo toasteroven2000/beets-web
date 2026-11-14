@@ -1,0 +1,169 @@
+package main
+
+import "strconv"
+
+// albumView is an Album: its cover, summary and facts stay in a sidebar while
+// the page beside it shows its tracks, details, fields or art.
+templ albumView(p recordPage) {
+	{{ id := strconv.Itoa(p.Record.ID()) }}
+	@layout(recordTitle(p), "Albums") {
+		<nav aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href="/albums">Albums</a></li>
+				<li class="breadcrumb-item active" aria-current="page">{ recordTitle(p) }</li>
+			</ol>
+		</nav>
+		<div class="row g-4">
+			<div class="col-lg-3">
+				<div class="sticky-lg-top album-side">
+					<img class="album-cover rounded border" src={ "/albums/" + id + "/art" } alt="" onerror="this.remove()"/>
+					<h1 class="h4 mt-3 mb-0">{ recordTitle(p) }</h1>
+					<div class="mb-1">
+						@artistLinks(p.Record.Str("albumartist"), p.Separators)
+					</div>
+					<div class="small text-body-secondary mb-2">{ p.Info.Summary }</div>
+					if p.Info.SourceURL != "" {
+						<div class="mb-3">
+							<a class="small source-link" href={ templ.URL(p.Info.SourceURL) } target="_blank" rel="noopener" title={ "Open on " + p.Info.Source }>
+								@sourceIcon(p.Info.Source)
+								{ p.Info.Source }
+							</a>
+						</div>
+					}
+					<dl class="row mb-0 small">
+						for _, f := range p.Info.Facts {
+							<dt class="col-5 fw-normal text-body-secondary">{ f[0] }</dt>
+							<dd class="col-7 text-break mb-1">{ f[1] }</dd>
+						}
+					</dl>
+					<div class="d-grid gap-2 mt-3">
+						<a class="btn btn-sm btn-outline-primary" href={ templ.URL(recordTabURL(albums, p.Record.ID(), "fields")) }><i class="bi bi-pencil" aria-hidden="true"></i> Modify</a>
+						<div class="d-flex gap-2">
+							<a class="btn btn-sm btn-outline-secondary flex-fill" href={ templ.URL(recordTabURL(albums, p.Record.ID(), "art")) }><i class="bi bi-image" aria-hidden="true"></i> Art</a>
+							<a class="btn btn-sm btn-outline-secondary flex-fill" href={ templ.URL(auditURL(albums, p.Record.ID())) }><i class="bi bi-journal-text" aria-hidden="true"></i> Audit</a>
+						</div>
+						<form method="post" action="/removals" class="d-grid">
+							<input type="hidden" name="scope" value="albums"/>
+							<input type="hidden" name="id" value={ id }/>
+							<button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash" aria-hidden="true"></i> Remove…</button>
+						</form>
+					</div>
+				</div>
+			</div>
+			<div class="col-lg-9">
+				<div class="btn-group btn-group-sm mb-3" role="group" aria-label="Album sections">
+					@albumTab(p, "items", "Tracks")
+					@albumTab(p, "fields", "Fields")
+					@albumTab(p, "art", "Art")
+				</div>
+				switch p.Tab {
+					case "items":
+						@recordTable(p.Items)
+						@albumDetails(p)
+					case "art":
+						@artTab(p)
+					default:
+						@recordForm(p)
+				}
+			</div>
+		</div>
+	}
+}
+
+templ albumTab(p recordPage, tab, label string) {
+	if p.Tab == tab {
+		<a class="btn btn-outline-secondary active" aria-current="page" href={ templ.URL(recordTabURL(albums, p.Record.ID(), tab)) }>{ label }</a>
+	} else {
+		<a class="btn btn-outline-secondary" href={ templ.URL(recordTabURL(albums, p.Record.ID(), tab)) }>{ label }</a>
+	}
+}
+
+// albumDetails is what the Album's fields say, grouped and read-only; the
+// Fields tab is where they change.
+templ albumDetails(p recordPage) {
+	if len(p.Info.Groups) > 0 {
+		<h2 class="h6 mt-4">
+			Details
+			<a class="small fw-normal ms-2" href={ templ.URL(recordTabURL(albums, p.Record.ID(), "fields")) }>Edit…</a>
+		</h2>
+		<div class="row g-3">
+			for _, g := range p.Info.Groups {
+				<div class="col-md-6">
+					<div class="card h-100">
+						<div class="card-header small fw-medium">{ g.Title }</div>
+						<div class="card-body py-2">
+							<dl class="row mb-0 small">
+								for _, f := range g.Rows {
+									<dt class="col-5 fw-normal text-body-secondary">{ f[0] }</dt>
+									<dd class="col-7 text-break mb-1">{ f[1] }</dd>
+								}
+							</dl>
+						</div>
+					</div>
+				</div>
+			}
+		</div>
+	}
+}
+
+// discBlock is one disc of an Album: its tracks, track number first. The
+// heading says which disc it is when the Album has more than one. A track the
+// Album has but the Library doesn't is a muted row.
+templ discBlock(t tableData, d discTable, several bool) {
+	<section class="mb-3">
+		if several {
+			<h2 class="h6 mb-1">
+				Disc { strconv.Itoa(d.Number) }
+				if d.Title != "" {
+					<span class="fw-normal text-body-secondary">· { d.Title }</span>
+				}
+				<span class="fw-normal text-body-secondary small">· { plural(len(d.Rows), "track", "tracks") }</span>
+			</h2>
+		}
+		<div class="table-responsive">
+			<table class="table table-sm table-hover align-middle disc-table">
+				<thead>
+					<tr>
+						<th class="select-col"><input class="form-check-input" type="checkbox" aria-label="Select all shown" data-select-all/></th>
+						<th class="text-end track-col">#</th>
+						<th>Title</th>
+						if t.ShowArtist {
+							<th>Artist</th>
+						}
+						<th class="format-col">Format</th>
+						<th class="text-end length-col">Length</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, s := range d.Slots() {
+						if s.Missing {
+							<tr class="text-body-secondary missing-track">
+								<td></td>
+								<td class="text-end track-col">{ strconv.Itoa(s.Number) }</td>
+								<td colspan={ missingSpan(t) }><i class="bi bi-exclamation-triangle text-warning" aria-hidden="true"></i> Track { strconv.Itoa(s.Number) } of { strconv.Itoa(d.Expected()) } isn't in your Library</td>
+							</tr>
+						} else {
+							<tr>
+								<td class="select-col"><input class="form-check-input" type="checkbox" name="id" value={ strconv.Itoa(s.Row.ID()) } aria-label="Select"/></td>
+								<td class="text-end text-body-secondary track-col">{ trackOnDisc(s.Row) }</td>
+								<td>
+									<a href={ templ.URL(recordURL(items, s.Row.ID())) }>{ orDash(s.Row.Str("title")) }</a>
+									if isExplicit(s.Row) {
+										<span class="badge text-bg-secondary ms-1" title="Explicit">E</span>
+									}
+								</td>
+								if t.ShowArtist {
+									<td>
+										@artistLinks(s.Row.Str("artist"), t.Separators)
+									</td>
+								}
+								<td class="small text-body-secondary text-nowrap">{ trackFormat(s.Row) }</td>
+								<td class="text-end length-col">{ duration(s.Row) }</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+	</section>
+}

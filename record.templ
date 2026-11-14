@@ -3,6 +3,15 @@ package main
 import "strconv"
 
 templ recordView(p recordPage) {
+	if p.Scope == albums {
+		@albumView(p)
+	} else {
+		@itemView(p)
+	}
+}
+
+// itemView is an Item: where it is, and every field to Modify.
+templ itemView(p recordPage) {
 	@layout(recordTitle(p), p.Scope.Title()) {
 		<nav aria-label="breadcrumb">
 			<ol class="breadcrumb">
@@ -14,25 +23,16 @@ templ recordView(p recordPage) {
 			</ol>
 		</nav>
 		<div class="d-flex gap-3 align-items-start mb-3">
-			if p.Scope == albums {
-				<img class="album-art rounded border" src={ "/albums/" + strconv.Itoa(p.Record.ID()) + "/art" } alt="" onerror="this.remove()"/>
-			}
 			<div>
 				<h1 class="h2 mb-1">{ recordTitle(p) }</h1>
 				<div class="text-body-secondary">
-					if p.Scope == albums {
-						@artistLinks(p.Record.Str("albumartist"), p.Separators)
-					} else {
-						@artistLinks(p.Record.Str("artist"), p.Separators)
-					}
+					@artistLinks(p.Record.Str("artist"), p.Separators)
 					if y := yearText(p.Record); y != "" {
 						<span>{ " · " + y }</span>
 					}
 					<span>· <a href={ templ.URL(auditURL(p.Scope, p.Record.ID())) }><i class="bi bi-journal-text" aria-hidden="true"></i> Audit</a></span>
 				</div>
-				if p.Scope == items {
-					<div class="small text-body-secondary font-monospace text-break">{ p.Record.Str("path") }</div>
-				}
+				<div class="small text-body-secondary font-monospace text-break">{ p.Record.Str("path") }</div>
 			</div>
 			<form method="post" action="/removals" class="ms-auto">
 				<input type="hidden" name="scope" value={ string(p.Scope) }/>
@@ -40,27 +40,7 @@ templ recordView(p recordPage) {
 				<button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash" aria-hidden="true"></i> Remove…</button>
 			</form>
 		</div>
-		if p.Scope == albums {
-			<ul class="nav nav-tabs mb-3">
-				<li class="nav-item">
-					<a class={ "nav-link", templ.KV("active", p.Tab == "items") } href={ templ.URL(recordTabURL(albums, p.Record.ID(), "items")) }>Items <span class="badge text-bg-secondary">{ strconv.Itoa(p.Items.Total) }</span></a>
-				</li>
-				<li class="nav-item">
-					<a class={ "nav-link", templ.KV("active", p.Tab == "fields") } href={ templ.URL(recordTabURL(albums, p.Record.ID(), "fields")) }>Fields</a>
-				</li>
-				<li class="nav-item">
-					<a class={ "nav-link", templ.KV("active", p.Tab == "art") } href={ templ.URL(recordTabURL(albums, p.Record.ID(), "art")) }>Art</a>
-				</li>
-			</ul>
-		}
-		switch p.Tab {
-			case "items":
-				@recordTable(p.Items)
-			case "art":
-				@artTab(p)
-			default:
-				@recordForm(p)
-		}
+		@recordForm(p)
 	}
 }
 

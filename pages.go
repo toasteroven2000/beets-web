@@ -21,6 +21,50 @@ type tableData struct {
 	Total      int
 	Next       string // URL of the next batch, "" at the end
 	Separators []string
+	Discs      []discTable // an Album's Items, a table per disc, instead of Rows
+	ShowArtist bool        // the Album's tracks are by different artists
+}
+
+// discTable is the tracks of one disc of an Album.
+type discTable struct {
+	Number int
+	Title  string // the disc's own title, if it has one
+	Rows   []record
+}
+
+// discTables groups an Album's Items by disc, in disc order and then track
+// order. An Item with no disc number is on disc 1.
+func discTables(rows []record) []discTable {
+	var discs []discTable
+	at := map[int]int{}
+	for _, r := range rows {
+		n := max(r.Int("disc"), 1)
+		i, ok := at[n]
+		if !ok {
+			i = len(discs)
+			at[n] = i
+			discs = append(discs, discTable{Number: n})
+		}
+		discs[i].Rows = append(discs[i].Rows, r)
+		if discs[i].Title == "" {
+			discs[i].Title = r.Str("disctitle")
+		}
+	}
+	slices.SortFunc(discs, func(a, b discTable) int { return a.Number - b.Number })
+	for _, d := range discs {
+		slices.SortStableFunc(d.Rows, func(a, b record) int { return a.Int("track") - b.Int("track") })
+	}
+	return discs
+}
+
+// albumDiscCount is how many discs an Album has: what it says, or the highest
+// disc its Items are on if it says nothing.
+func albumDiscCount(album record, discs []discTable) int {
+	n := max(album.Int("disctotal"), 1)
+	for _, d := range discs {
+		n = max(n, d.Number)
+	}
+	return n
 }
 
 func (t tableData) ModifyAllURL() string {
@@ -61,6 +105,7 @@ type recordPage struct {
 	Record     record
 	Album      record    // an Item's Album, if it has one
 	Items      tableData // an Album's Items
+	Info       albumInfo // an Album's summary, facts and details
 	Separators []string
 
 	// The Art tab.
@@ -209,6 +254,23 @@ func trackNumber(r record) string {
 		return fmt.Sprintf("%d-%d", d, t)
 	}
 	return strconv.Itoa(t)
+}
+
+// missingSpan is how many columns a missing track's message spans.
+func missingSpan(t tableData) string {
+	if t.ShowArtist {
+		return "4"
+	}
+	return "3"
+}
+
+// trackOnDisc is an Item's track number on its own disc, which the table it is
+// in already names.
+func trackOnDisc(r record) string {
+	if t := r.Int("track"); t != 0 {
+		return strconv.Itoa(t)
+	}
+	return ""
 }
 
 func yearText(r record) string {
