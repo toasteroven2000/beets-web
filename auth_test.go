@@ -157,7 +157,7 @@ func TestAuditShowsActorsAndFiltersByThem(t *testing.T) {
 		}})
 	}
 	rec := get(t, h, "/audit?actor=alice")
-	mustContain(t, rec, "<th>Actor</th>", `<td class="small">alice</td>`, `name="actor" value="alice"`, `href="/audit">Clear`)
+	mustContain(t, rec, "<th>Actor</th>", `actor-mark">A</span>alice`, `name="actor" value="alice"`, `href="/audit">Clear`)
 	if r, _ := f.last(t, "GET", "/audit"); r.URL.Query().Get("actor") != "alice" {
 		t.Errorf("query %v", r.URL.Query())
 	}

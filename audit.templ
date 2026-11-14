@@ -1,8 +1,8 @@
 package main
 
 import (
+	"net/url"
 	"strconv"
-	"strings"
 )
 
 // auditView lists every change beets-api made to the Library, newest first.
@@ -45,25 +45,20 @@ templ auditView(p auditPage) {
 			<p class="text-body-secondary">No changes recorded.</p>
 		} else {
 			<div class="table-responsive">
-				<table class="table table-sm align-middle audit-table">
+				<table class="table table-sm table-hover align-middle audit-table">
 					<thead>
-						<tr><th>When</th><th>Action</th><th>Target</th><th>Actor</th><th>Client</th><th>Changes</th></tr>
+						<tr><th>ID</th><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>What changed</th></tr>
 					</thead>
 					<tbody>
 						for _, e := range p.Entries {
 							<tr>
-								<td class="small text-nowrap">{ e.RecordedAt }</td>
+								<td class="small"><a href={ templ.URL("/audit/" + strconv.Itoa(e.ID)) }>{ strconv.Itoa(e.ID) }</a></td>
+								<td class="small text-nowrap">{ msTime(e.RecordedAt) }</td>
+								<td class="small">
+									@actorChip(e.Actor)
+								</td>
 								<td>
-									<code>{ e.Action }</code>
-									if e.OperationID != nil {
-										<div class="small">
-											if strings.HasSuffix(e.Action, ".modify") {
-												<a href={ templ.URL(operationURL(e)) }>Modification { strconv.Itoa(*e.OperationID) }</a>
-											} else {
-												<a href={ templ.URL(operationURL(e)) }>Import { strconv.Itoa(*e.OperationID) }</a>
-											}
-										</div>
-									}
+									@actionBadge(e.Action)
 								</td>
 								<td class="text-nowrap">
 									if u := targetURL(e.Target); u != "" {
@@ -72,18 +67,10 @@ templ auditView(p auditPage) {
 										<span class="font-monospace small">{ e.Target }</span>
 									}
 								</td>
-								<td class="small">{ orDash(e.Actor) }</td>
-								<td class="small">{ orDash(e.Client) }</td>
-								<td class="small">
-									for _, c := range auditChanges(e.Changes) {
-										<div class="text-break">
-											<code>{ c.Key }</code>
-											if c.Pair {
-												<del>{ c.Old }</del> → <ins>{ c.New }</ins>
-											} else {
-												<span class="text-body-secondary json">{ c.Text }</span>
-											}
-										</div>
+								<td class="small text-body-secondary">
+									{ auditSummary(e) }
+									if e.OperationID != nil {
+										<a class="ms-1" href={ templ.URL(operationURL(e)) }>{ operationName(e) }</a>
 									}
 								</td>
 							</tr>
@@ -102,4 +89,179 @@ templ auditView(p auditPage) {
 			</div>
 		}
 	}
+}
+
+// actionBadge is an action with its icon, coloured by what kind of change it is.
+templ actionBadge(action string) {
+	<span class={ "badge fw-normal", "text-bg-" + auditTone(action) }>
+		@icon(auditIcon(action))
+		{ action }
+	</span>
+}
+
+// actorChip is a person's name beside a round marker with their initial.
+templ actorChip(actor string) {
+	if actor == "" {
+		<span class="text-body-secondary">—</span>
+	} else {
+		<span class="actor"><span class="actor-mark">{ initial(actor) }</span>{ actor }</span>
+	}
+}
+
+// auditEntryView shows one Audit entry whole: what changed, in full, and who
+// and when. Beside it is the history of what it changed.
+templ auditEntryView(p auditEntryPage) {
+	{{ e := p.Entry }}
+	{{ id := strconv.Itoa(e.ID) }}
+	@layout("Audit entry "+id, "Audit") {
+		<nav aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href="/audit">Audit</a></li>
+				<li class="breadcrumb-item active" aria-current="page">Entry { id }</li>
+			</ol>
+		</nav>
+		<div class="row g-4">
+			<div class="col-lg-3 order-lg-2">
+				<div class="small text-body-secondary mb-2">
+					History of
+					if u := targetURL(e.Target); u != "" {
+						<a class="font-monospace" href={ templ.URL(u) }>{ e.Target }</a>
+					} else {
+						<span class="font-monospace">{ e.Target }</span>
+					}
+				</div>
+				<div class="timeline">
+					for _, h := range p.History {
+						<a class={ "timeline-item", templ.KV("current", h.ID == e.ID) } href={ templ.URL("/audit/" + strconv.Itoa(h.ID)) }>
+							<span class={ "dot dot-sm", "text-bg-" + auditTone(h.Action) }></span>
+							<span>
+								<span class="small fw-medium">{ h.Action }</span>
+								<br/>
+								<span class="small text-body-secondary text-break">{ msTime(h.RecordedAt) } · { orDash(h.Actor) }</span>
+							</span>
+						</a>
+					}
+				</div>
+				if n := p.MoreHistory(); n > 0 {
+					<a class="small" href={ templ.URL("/audit?target=" + url.QueryEscape(e.Target)) }>{ strconv.Itoa(n) } more</a>
+				}
+			</div>
+			<div class="col-lg-9">
+				<div class="card">
+					<div class="card-body">
+						<div class="d-flex align-items-start gap-3">
+							<span class={ "dot dot-lg", "text-bg-" + auditTone(e.Action) }>
+								@icon(auditIcon(e.Action))
+							</span>
+							<div>
+								<h1 class="h4 mb-1">{ upperFirst(auditSummary(e)) }</h1>
+								<div class="text-body-secondary">
+									@actorChip(e.Actor)
+									made this change
+									if e.Client != "" {
+										via { e.Client }
+									}
+									at <span class="text-nowrap">{ msTime(e.RecordedAt) }</span>
+									if e.OperationID != nil {
+										· part of <a href={ templ.URL(operationURL(e)) }>{ operationName(e) }</a>
+									}
+								</div>
+							</div>
+						</div>
+						<hr/>
+						if len(e.Changes) == 0 {
+							<p class="text-body-secondary">No changes recorded.</p>
+						} else {
+							<table class="table table-sm align-middle mb-0 audit-table">
+								<tbody>
+									for _, c := range changeViews(e.Changes) {
+										<tr>
+											<th class="fw-normal font-monospace pe-3 align-top text-nowrap change-key">{ c.Key }</th>
+											<td class="text-break">
+												@changeValue(c)
+											</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						}
+						<div class="small text-body-secondary mt-3">
+							Audit entry { id }
+							· <a href={ templ.URL("/audit?target=" + url.QueryEscape(e.Target)) }>all entries for { e.Target }</a>
+							if e.Actor != "" {
+								· <a href={ templ.URL("/audit?actor=" + url.QueryEscape(e.Actor)) }>all by { e.Actor }</a>
+							}
+							if e.OperationID != nil {
+								· <a href={ templ.URL("/audit?operation=" + strconv.Itoa(*e.OperationID)) }>all of { operationName(e) }</a>
+							}
+						</div>
+					</div>
+				</div>
+				<details class="mt-3">
+					<summary class="small text-body-secondary">The entry as beets-api sent it</summary>
+					<pre class="small mt-2 p-2 border rounded"><code>{ auditEntryJSON(e) }</code></pre>
+				</details>
+			</div>
+		</div>
+	}
+}
+
+// changeValue shows one change the way its kind of value reads best.
+templ changeValue(c changeView) {
+	switch c.Kind {
+		case "pair":
+			if c.OldEmpty {
+				<del class="empty"></del>
+			} else {
+				<span class="same">{ c.Old.Pre }</span><del>{ c.Old.Mid }</del><span class="same">{ c.Old.Post }</span>
+			}
+			<i class="bi bi-arrow-right text-body-secondary" aria-hidden="true"></i>
+			if c.NewEmpty {
+				<ins class="empty"></ins>
+			} else {
+				<span class="same">{ c.New.Pre }</span><ins>{ c.New.Mid }</ins><span class="same">{ c.New.Post }</span>
+			}
+		case "lines":
+			for _, l := range c.Lines {
+				<div class="font-monospace small text-break">{ l }</div>
+			}
+		case "files":
+			<details>
+				<summary>{ plural(len(c.Files), "file", "files") }</summary>
+				<table class="table table-sm table-borderless mb-0 mt-1 w-auto">
+					<tbody>
+						for _, f := range c.Files {
+							<tr>
+								<td class="text-body-secondary text-end pe-2">Item { f.ID }</td>
+								<td class="font-monospace small text-break">{ f.Path }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</details>
+		case "rows":
+			if len(c.Rows) > 6 {
+				<details>
+					<summary>{ plural(len(c.Rows), "field", "fields") }</summary>
+					@changeRows(c.Rows)
+				</details>
+			} else {
+				@changeRows(c.Rows)
+			}
+		default:
+			{ c.Text }
+	}
+}
+
+templ changeRows(rows [][2]string) {
+	<table class="table table-sm table-borderless mb-0 w-auto small">
+		<tbody>
+			for _, r := range rows {
+				<tr>
+					<td class="text-body-secondary pe-3">{ r[0] }</td>
+					<td class="text-break">{ r[1] }</td>
+				</tr>
+			}
+		</tbody>
+	</table>
 }

@@ -35,7 +35,7 @@ templ modifyView(p modifyPage) {
 
 templ modificationView(m modification) {
 	@layout("Modification", "Modifications") {
-		@pageHeader("Modification", m.CreatedAt) {
+		@pageHeader("Modification", msTime(m.CreatedAt)) {
 		}
 		<div id="modification" if inProgress(m.Status) { hx-get={ "/modifications/" + string(m.ID) } hx-trigger="every 1s" hx-select="#modification" hx-swap="outerHTML" }>
 			@requestSummary(m)
@@ -209,7 +209,7 @@ templ modificationsView(p modificationsPage) {
 				<tbody>
 					for _, m := range p.Mods {
 						<tr>
-							<td class="small"><a href={ templ.URL("/modifications/" + string(m.ID)) }>{ m.CreatedAt }</a></td>
+							<td class="small"><a href={ templ.URL("/modifications/" + string(m.ID)) }>{ msTime(m.CreatedAt) }</a></td>
 							<td><span class={ "badge", statusClass(m.Status) }>{ statusText(m.Status) }</span></td>
 							<td>{ modScope(m.Request).Title() } <code>{ m.Request.Query }</code></td>
 							<td class="small">

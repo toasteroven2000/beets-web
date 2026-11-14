@@ -23,10 +23,22 @@
 .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: block; }
 .art-current { top: 1rem; }
 .art-remove { max-width: 24rem; }
-.audit-table .json, .audit-table del, .audit-table ins { white-space: pre-wrap; }
-.audit-table del { color: var(--bs-danger-text-emphasis); }
-.audit-table ins { color: var(--bs-success-text-emphasis); text-decoration: none; }
-.audit-table del:empty::before, .audit-table ins:empty::before { content: "(empty)"; font-style: italic; opacity: .6; }
+.audit-table .json, .audit-table del, .audit-table ins, .audit-table .same { white-space: pre-wrap; }
+.audit-table .same { color: var(--bs-secondary-color); }
+.audit-table .change-key { width: 9rem; }
+.audit-table del:empty:not(.empty), .audit-table ins:empty:not(.empty) { display: none; }
+.audit-table del.empty::before, .audit-table ins.empty::before { content: "empty"; font-style: italic; opacity: .7; }
+.actor { display: inline-flex; align-items: center; gap: .35rem; }
+.actor-mark { display: inline-flex; align-items: center; justify-content: center; width: 1.3rem; height: 1.3rem; border-radius: 50%; background: var(--bs-secondary-bg); font-size: .7rem; font-weight: 600; }
+.dot { display: inline-flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; flex: none; }
+.dot-sm { width: .7rem; height: .7rem; margin-top: .35rem; }
+.dot-lg { width: 2.6rem; height: 2.6rem; font-size: 1.2rem; }
+.timeline { border-left: 2px solid var(--bs-border-color); margin-left: .4rem; }
+.timeline-item { display: flex; gap: .6rem; align-items: flex-start; padding: .4rem .6rem; margin-left: -.45rem; color: inherit; text-decoration: none; border-radius: .4rem; }
+.timeline-item.current { background: var(--bs-primary-bg-subtle); }
+.timeline-item:hover:not(.current) { background: var(--bs-tertiary-bg); }
+.audit-table del { color: var(--bs-danger-text-emphasis); background: var(--bs-danger-bg-subtle); border-radius: .2rem; }
+.audit-table ins { color: var(--bs-success-text-emphasis); background: var(--bs-success-bg-subtle); text-decoration: none; border-radius: .2rem; }
 .candidate > summary { cursor: pointer; }
 .choice { max-width: 14rem; }
 .source-icon { height: 1em; width: auto; vertical-align: -.125em; }

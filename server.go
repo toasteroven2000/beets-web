@@ -52,6 +52,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /modifications", s.handleCreateModification)
 	mux.HandleFunc("GET /modifications", s.handleModifications)
 	mux.HandleFunc("GET /audit", s.handleAudit)
+	mux.HandleFunc("GET /audit/{id}", s.handleAuditEntry)
 	mux.HandleFunc("GET /profile", s.handleProfile)
 	mux.HandleFunc("GET /modifications/{id}", s.handleModification)
 	mux.HandleFunc("POST /modifications/{id}/confirm", s.handleConfirm)
@@ -504,6 +505,27 @@ func (s *server) handleModifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render(w, http.StatusOK, modificationsView(modificationsPage{Mods: res.Results, Total: res.Total, Offset: offsetParam(r)}))
+}
+
+// handleAuditEntry shows one Audit entry whole.
+func (s *server) handleAuditEntry(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		fail(w, &apiError{Status: http.StatusNotFound, Detail: "audit entry not found"})
+		return
+	}
+	e, err := s.api.AuditEntry(r.Context(), id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	// The other entries for the same Album or Item, newest first.
+	history, err := s.api.Audit(r.Context(), e.Target, nil, 0, "", 20, 0)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	render(w, http.StatusOK, auditEntryView(auditEntryPage{Entry: e, History: history.Results, HistoryTotal: history.Total}))
 }
 
 func (s *server) handleAudit(w http.ResponseWriter, r *http.Request) {

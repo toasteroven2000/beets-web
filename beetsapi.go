@@ -586,6 +586,13 @@ func (c *beetsAPI) AbortImport(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodDelete, "/imports/"+url.PathEscape(id), nil, nil, nil)
 }
 
+// AuditEntry is one Audit entry by id; a 404 means there is none.
+func (c *beetsAPI) AuditEntry(ctx context.Context, id int) (auditEntry, error) {
+	var out auditEntry
+	err := c.do(ctx, http.MethodGet, "/audit/"+strconv.Itoa(id), nil, nil, &out)
+	return out, err
+}
+
 // Imports lists Imports newest first, optionally only those with a status.
 func (c *beetsAPI) Imports(ctx context.Context, statuses []string, limit, offset int) (importList, error) {
 	v := url.Values{"limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}

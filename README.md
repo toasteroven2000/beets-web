@@ -47,7 +47,7 @@ These features need endpoints that beets-api doesn't have yet. Until they exist,
 
 - Artist list: `GET /artists` (beets-api `.scratch/artists/`)
 - Modifications list: `GET /modifications` (beets-api `.scratch/modifications-history/`)
-- Audit: `GET /audit`
+- Audit: `GET /audit`, and `GET /audit/{id}` for one entry
 - Album art: `GET /albums/{id}/art` (beets-api `.scratch/album-art/`)
 
 ## Album art

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // tableData is a list of Albums or Items, with the query that produced it, so
@@ -311,6 +312,33 @@ func (p auditPage) OperationName() string {
 }
 
 // operationURL links an Audit entry to the Modification or Import behind it.
+// msTime shows a timestamp to the millisecond: beets-api's have microseconds.
+// Anything that isn't one is shown as it is.
+func msTime(s string) string {
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		return s
+	}
+	return t.Format("2006-01-02T15:04:05.000-07:00")
+}
+
+// auditEntryJSON is the whole entry as beets-api sent it, indented.
+func auditEntryJSON(e auditEntry) string {
+	b, _ := json.MarshalIndent(e, "", "  ")
+	return string(b)
+}
+
+// operationName names what an entry's operation id refers to.
+func operationName(e auditEntry) string {
+	if e.OperationID == nil {
+		return ""
+	}
+	if strings.HasSuffix(e.Action, ".modify") {
+		return "Modification " + strconv.Itoa(*e.OperationID)
+	}
+	return "Import " + strconv.Itoa(*e.OperationID)
+}
+
 func operationURL(e auditEntry) string {
 	if e.OperationID == nil {
 		return ""
