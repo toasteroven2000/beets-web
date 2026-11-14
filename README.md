@@ -62,6 +62,10 @@ A finished Import has an "Undo this Import…" button (`GET` and `POST /imports/
 
 beets-api only accepts `Host: 127.0.0.1` or `localhost`, so beets-ui in another container can't reach it yet (beets-api `.scratch/imports/issues/02-allowed-hosts.md`).
 
+## Remove
+
+Every Album and Item list has **Remove selected** and **Remove all N** (the latter only when the list has a query), and each Album and Item page has **Remove…**. They ask beets-api for a Removal Preview (`POST /removals`), which lists what would go and how many files would be deleted, and nothing is removed until you confirm on that page. Confirming removes the records and deletes their files from disk, which can't be undone; files outside the music directory are left where they are. Removals are listed under the person menu, and each removed Album or Item is in the Audit, linked to its Removal.
+
 ## Who is making a change
 
 beets-ui has no login of its own. Put it behind a reverse proxy that signs people in, such as Traefik with Authelia, which sends the person's name in headers (`Remote-User`, `Remote-Name`, `Remote-Email`, `Remote-Groups`). beets-ui requires the header named by `-actor-header` (default `Remote-User`) on every request and answers `401` without it, so nothing is written without saying who wrote it. It sends that name to beets-api as `X-Beets-API-Actor`, and beets-api records it on each Audit entry and each Choice of an Import. Authorization isn't done: everyone the proxy admits can do everything, and `Remote-Groups` is only shown.

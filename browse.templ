@@ -234,11 +234,21 @@ templ recordTable(t tableData) {
 	if t.Total == 0 {
 		<p class="text-body-secondary">No { t.Scope.Title() } match.</p>
 	} else {
+		if t.Query != "" {
+			<form id={ "remove-all-" + string(t.Scope) } method="post" action="/removals">
+				<input type="hidden" name="scope" value={ string(t.Scope) }/>
+				<input type="hidden" name="q" value={ t.Query }/>
+			</form>
+		}
 		<form method="get" action="/modify" class="record-table">
 			<input type="hidden" name="scope" value={ string(t.Scope) }/>
 			<div class="d-flex flex-wrap gap-2 mb-2">
 				<button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-pencil" aria-hidden="true"></i> Modify selected</button>
 				<a class="btn btn-sm btn-outline-primary" href={ templ.URL(t.ModifyAllURL()) }><i class="bi bi-pencil" aria-hidden="true"></i> Modify all { count(t.Total, t.Scope) }</a>
+				<button class="btn btn-sm btn-outline-danger ms-md-3" type="submit" formaction="/removals" formmethod="post"><i class="bi bi-trash" aria-hidden="true"></i> Remove selected</button>
+				if t.Query != "" {
+					<button class="btn btn-sm btn-outline-danger" type="submit" form={ "remove-all-" + string(t.Scope) }><i class="bi bi-trash" aria-hidden="true"></i> Remove all { count(t.Total, t.Scope) }</button>
+				}
 			</div>
 			<div class="table-responsive">
 				<table class="table table-sm table-hover align-middle">

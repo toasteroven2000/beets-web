@@ -111,7 +111,7 @@ type previewEntry struct {
 }
 
 type ref struct {
-	Scope string `json:"scope"` // "albums" or "items"
+	Scope string `json:"kind"` // "albums" or "items"
 	ID    int    `json:"id"`
 	Path  string `json:"path,omitempty"`
 	Error string `json:"error,omitempty"`
@@ -646,4 +646,94 @@ func (c *beetsAPI) UndoPreview(ctx context.Context, id string) (undoPlan, error)
 
 func (c *beetsAPI) UndoImport(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodPost, "/imports/"+url.PathEscape(id)+"/undo", nil, nil, nil)
+}
+
+// removalRequest is a Remove as beets-api takes it: a scope and a query.
+type removalRequest struct {
+	Scope string `json:"scope"`
+	Query string `json:"query"`
+}
+
+// removalFile is one Item of an Album that would be removed, and its file.
+type removalFile struct {
+	ID   int    `json:"id"`
+	Path string `json:"path"`
+}
+
+type removalAlbum struct {
+	ID    int           `json:"id"`
+	Label string        `json:"label"`
+	Items []removalFile `json:"items"`
+	Art   *string       `json:"art"`
+}
+
+type removalItem struct {
+	ID      int    `json:"id"`
+	Label   string `json:"label"`
+	Path    string `json:"path"`
+	AlbumID *int   `json:"album_id"`
+}
+
+type removalResult struct {
+	Preview struct {
+		Albums []removalAlbum `json:"albums"`
+		Items  []removalItem  `json:"items"`
+	} `json:"preview"`
+	Removed []ref  `json:"removed"`
+	Failed  []ref  `json:"failed"`
+	Current *ref   `json:"current"`
+	Stale   []ref  `json:"stale"`
+	Error   string `json:"error"`
+}
+
+// removal is one requested Remove, from its Preview to its outcome.
+type removal struct {
+	ID        opID           `json:"id"`
+	Status    string         `json:"status"`
+	Request   removalRequest `json:"request"`
+	Result    removalResult  `json:"result"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
+}
+
+// removalSummary is one row of the Removals list, without the Preview.
+type removalSummary struct {
+	ID      opID           `json:"id"`
+	Status  string         `json:"status"`
+	Request removalRequest `json:"request"`
+	Counts  struct {
+		Albums  int `json:"albums"`
+		Items   int `json:"items"`
+		Removed int `json:"removed"`
+		Failed  int `json:"failed"`
+	} `json:"counts"`
+	CreatedAt string `json:"created_at"`
+}
+
+type removalList struct {
+	Total   int              `json:"total"`
+	Results []removalSummary `json:"results"`
+}
+
+func (c *beetsAPI) CreateRemoval(ctx context.Context, req removalRequest) (removal, error) {
+	var out removal
+	err := c.do(ctx, http.MethodPost, "/removals", nil, req, &out)
+	return out, err
+}
+
+func (c *beetsAPI) Removal(ctx context.Context, id string) (removal, error) {
+	var out removal
+	err := c.do(ctx, http.MethodGet, "/removals/"+url.PathEscape(id), nil, nil, &out)
+	return out, err
+}
+
+func (c *beetsAPI) ConfirmRemoval(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodPost, "/removals/"+url.PathEscape(id)+"/confirm", nil, nil, nil)
+}
+
+func (c *beetsAPI) Removals(ctx context.Context, limit, offset int) (removalList, error) {
+	v := url.Values{"limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}
+	var out removalList
+	err := c.do(ctx, http.MethodGet, "/removals", v, nil, &out)
+	return out, err
 }

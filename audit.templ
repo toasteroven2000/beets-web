@@ -39,7 +39,7 @@ templ auditView(p auditPage) {
 			</div>
 		</form>
 		if p.Operation > 0 {
-			<p class="small">Only changes made by <a href={ templ.URL(operationURL(auditEntry{Action: firstAction(p.Entries), OperationID: &p.Operation})) }>{ p.OperationName() }</a>.</p>
+			<p class="small">Only changes made by <a href={ templ.URL(p.OperationLink()) }>{ p.OperationName() }</a>.</p>
 		}
 		if len(p.Entries) == 0 {
 			<p class="text-body-secondary">No changes recorded.</p>

@@ -1,0 +1,185 @@
+package main
+
+import "strconv"
+
+// removalView shows a Removal: its Preview and, once the Preview is
+// confirmed, how it went. It deletes files, so it says so before it asks.
+templ removalView(rm removal) {
+	@layout("Removal", "Removals") {
+		{{ id := string(rm.ID) }}
+		<nav aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href="/removals">Removals</a></li>
+				<li class="breadcrumb-item active" aria-current="page">Removal { id }</li>
+			</ol>
+		</nav>
+		@pageHeader("Removal "+id, msTime(rm.CreatedAt)) {
+		}
+		<div
+			id="removal"
+			if inProgress(rm.Status) {
+				hx-get={ "/removals/" + id }
+				hx-trigger="every 1s"
+				hx-select="#removal"
+				hx-swap="outerHTML"
+			}
+		>
+			<div class="card mb-3">
+				<div class="card-body d-flex flex-wrap gap-2 align-items-center">
+					<span class={ "badge", statusClass(rm.Status) }>{ statusText(rm.Status) }</span>
+					<span>{ scopeOf(rm.Request.Scope).Title() } matching <code>{ rm.Request.Query }</code></span>
+				</div>
+			</div>
+			@removalOutcome(rm)
+			@removalPreview(rm)
+		</div>
+	}
+}
+
+templ removalOutcome(rm removal) {
+	{{ id := string(rm.ID) }}
+	switch rm.Status {
+		case "awaiting_confirmation":
+			<div class="alert alert-danger">
+				<strong>Confirming removes { removalPreviewCount(rm) } from the Library and deletes { plural(removalFileCount(rm), "file", "files") } from disk.</strong>
+				Nothing archives them, and it can't be undone. Files outside the music directory are left where they are.
+			</div>
+			<form method="post" action={ templ.URL("/removals/" + id + "/confirm") } class="d-flex flex-wrap gap-2 align-items-center mb-3">
+				<button class="btn btn-danger"><i class="bi bi-trash" aria-hidden="true"></i> Remove { removalPreviewCount(rm) } and delete the files</button>
+				<a href="javascript:history.back()" class="btn btn-outline-secondary">Cancel</a>
+				<span class="small text-body-secondary">Nothing is removed until you confirm.</span>
+			</form>
+		case "no_changes":
+			<div class="alert alert-info">Nothing matches, so there is nothing to remove.</div>
+		case "queued":
+			<div class="alert alert-info">Queued behind another Removal…</div>
+		case "applying":
+			<div class="alert alert-info">
+				Removing… { strconv.Itoa(len(rm.Result.Removed)+len(rm.Result.Failed)) } of { strconv.Itoa(len(rm.Result.Preview.Albums)+len(rm.Result.Preview.Items)) } done.
+				<div class="progress mt-2" role="progressbar" aria-label="Progress">
+					<div class="progress-bar" style={ removalProgressStyle(rm) }></div>
+				</div>
+			</div>
+		case "applied":
+			<div class="alert alert-success">
+				Removed { records(len(rm.Result.Removed)) }.
+				<a href={ templ.URL("/audit?operation=" + id) }>What it removed, in the Audit</a>
+			</div>
+		case "partial":
+			<div class="alert alert-danger">
+				Removed { records(len(rm.Result.Removed)) }; { strconv.Itoa(len(rm.Result.Failed)) } failed.
+				if rm.Result.Error != "" {
+					<div class="small">{ rm.Result.Error }</div>
+				}
+				<ul class="mb-0 mt-2 small">
+					for _, f := range rm.Result.Failed {
+						<li><a href={ templ.URL(recordURL(scope(f.Scope), f.ID)) }>{ scope(f.Scope).One() } { strconv.Itoa(f.ID) }</a>: { f.Error }</li>
+					}
+				</ul>
+				<a class="d-block mt-2" href={ templ.URL("/audit?operation=" + id) }>What it removed, in the Audit</a>
+			</div>
+		case "rejected":
+			<div class="alert alert-warning">
+				The Library changed after this Preview, so nothing was removed. Changed since:
+				<ul class="small mt-2">
+					for _, s := range rm.Result.Stale {
+						<li><a href={ templ.URL(recordURL(scope(s.Scope), s.ID)) }>{ scope(s.Scope).One() } { strconv.Itoa(s.ID) }</a></li>
+					}
+				</ul>
+				<form method="post" action={ templ.URL("/removals/" + id + "/again") }>
+					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
+				</form>
+			</div>
+		case "interrupted":
+			<div class="alert alert-warning">
+				beets-api restarted while this was running. { records(len(rm.Result.Removed)) } had been removed.
+				<form method="post" action={ templ.URL("/removals/" + id + "/again") } class="mt-2">
+					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
+				</form>
+			</div>
+	}
+}
+
+// removalPreview lists what a Removal would remove, or removed.
+templ removalPreview(rm removal) {
+	if len(rm.Result.Preview.Albums) > 0 {
+		<h2 class="h4 mt-3">{ count(len(rm.Result.Preview.Albums), albums) }</h2>
+		for i, a := range rm.Result.Preview.Albums {
+			if i < previewLimit {
+				<div class="card mb-2">
+					<div class="card-header py-1 d-flex gap-2">
+						<a href={ templ.URL(recordURL(albums, a.ID)) }>{ a.Label }</a>
+						<span class="text-body-secondary small">{ plural(len(a.Items), "file", "files") }</span>
+					</div>
+					<details class="card-body py-2">
+						<summary class="small text-body-secondary">Files</summary>
+						<div class="font-monospace small text-break mt-1">
+							for _, f := range a.Items {
+								<div>{ f.Path }</div>
+							}
+							if a.Art != nil {
+								<div>{ *a.Art }</div>
+							}
+						</div>
+					</details>
+				</div>
+			}
+		}
+		if len(rm.Result.Preview.Albums) > previewLimit {
+			<p class="text-body-secondary">…and { strconv.Itoa(len(rm.Result.Preview.Albums) - previewLimit) } more Albums.</p>
+		}
+	}
+	if len(rm.Result.Preview.Items) > 0 {
+		<h2 class="h4 mt-3">{ count(len(rm.Result.Preview.Items), items) }</h2>
+		for i, it := range rm.Result.Preview.Items {
+			if i < previewLimit {
+				<div class="card mb-2">
+					<div class="card-header py-1"><a href={ templ.URL(recordURL(items, it.ID)) }>{ it.Label }</a></div>
+					<div class="card-body py-2 font-monospace small text-break">{ it.Path }</div>
+				</div>
+			}
+		}
+		if len(rm.Result.Preview.Items) > previewLimit {
+			<p class="text-body-secondary">…and { strconv.Itoa(len(rm.Result.Preview.Items) - previewLimit) } more Items.</p>
+		}
+	}
+}
+
+templ removalsView(p removalsPage) {
+	@layout("Removals", "Removals") {
+		@pageHeader("Removals", "Every Removal, newest first. The Audit shows what each one removed.") {
+		}
+		if len(p.Removals) == 0 {
+			<p class="text-body-secondary">No Removals yet.</p>
+		} else {
+			<table class="table table-sm table-hover align-middle">
+				<thead>
+					<tr><th>When</th><th>Status</th><th>Query</th><th>Removed</th></tr>
+				</thead>
+				<tbody>
+					for _, r := range p.Removals {
+						<tr>
+							<td class="small"><a href={ templ.URL("/removals/" + string(r.ID)) }>{ msTime(r.CreatedAt) }</a></td>
+							<td><span class={ "badge", statusClass(r.Status) }>{ statusText(r.Status) }</span></td>
+							<td>{ scopeOf(r.Request.Scope).Title() } <code>{ r.Request.Query }</code></td>
+							<td class="small">
+								{ removalCount(r.Counts.Albums, r.Counts.Items) }
+								if r.Counts.Failed > 0 {
+									<span class="text-danger">· { strconv.Itoa(r.Counts.Failed) } failed</span>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+			<div class="d-flex gap-2">
+				if p.Offset > 0 {
+					<a class="btn btn-sm btn-outline-secondary" href={ templ.URL("/removals?offset=" + strconv.Itoa(max(0, p.Offset-50))) }><i class="bi bi-chevron-left" aria-hidden="true"></i> Newer</a>
+				}
+				if p.Offset+len(p.Removals) < p.Total {
+					<a class="btn btn-sm btn-outline-secondary" href={ templ.URL("/removals?offset=" + strconv.Itoa(p.Offset+50)) }>Older <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+				}
+			</div>
+		}
+	}
+}

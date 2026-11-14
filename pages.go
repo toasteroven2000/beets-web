@@ -106,6 +106,12 @@ type modifyPage struct {
 	Back  string
 }
 
+type removalsPage struct {
+	Removals []removalSummary
+	Total    int
+	Offset   int
+}
+
 type modificationsPage struct {
 	Mods   []modSummary
 	Total  int
@@ -299,19 +305,26 @@ type auditPage struct {
 	Operation int // a Modification's or Import's id, 0 for any
 }
 
-// OperationName names the Modification or Import the page is filtered to.
-// They share ids, so the kind comes from the entries' actions.
+// OperationName names the Modification, Removal or Import the page is
+// filtered to. They share ids, so the kind comes from the entries.
 func (p auditPage) OperationName() string {
-	for _, e := range p.Entries {
-		if strings.HasSuffix(e.Action, ".modify") {
-			return "Modification " + strconv.Itoa(p.Operation)
-		}
-		return "Import " + strconv.Itoa(p.Operation)
+	if len(p.Entries) == 0 {
+		return "operation " + strconv.Itoa(p.Operation)
 	}
-	return "operation " + strconv.Itoa(p.Operation)
+	return operationKind(p.Entries[0]) + " " + strconv.Itoa(p.Operation)
 }
 
-// operationURL links an Audit entry to the Modification or Import behind it.
+// OperationLink is where the Modification, Removal or Import the page is
+// filtered to can be read.
+func (p auditPage) OperationLink() string {
+	if len(p.Entries) == 0 {
+		return ""
+	}
+	e := p.Entries[0]
+	e.OperationID = &p.Operation
+	return operationURL(e)
+}
+
 // msTime shows a timestamp to the millisecond: beets-api's have microseconds.
 // Anything that isn't one is shown as it is.
 func msTime(s string) string {
@@ -329,22 +342,38 @@ func auditEntryJSON(e auditEntry) string {
 }
 
 // operationName names what an entry's operation id refers to.
+// operationKind says what an entry's operation id refers to. Imports remove
+// records too, to replace duplicates or to undo themselves; those entries say
+// so, and the rest of the removals are Removals.
+func operationKind(e auditEntry) string {
+	_, replaced := e.Changes["replaced_by"]
+	_, undone := e.Changes["undo_of_import"]
+	switch {
+	case strings.HasSuffix(e.Action, ".modify"):
+		return "Modification"
+	case strings.HasSuffix(e.Action, ".remove") && !replaced && !undone:
+		return "Removal"
+	}
+	return "Import"
+}
+
 func operationName(e auditEntry) string {
 	if e.OperationID == nil {
 		return ""
 	}
-	if strings.HasSuffix(e.Action, ".modify") {
-		return "Modification " + strconv.Itoa(*e.OperationID)
-	}
-	return "Import " + strconv.Itoa(*e.OperationID)
+	return operationKind(e) + " " + strconv.Itoa(*e.OperationID)
 }
 
+// operationURL links an Audit entry to the Modification, Removal or Import behind it.
 func operationURL(e auditEntry) string {
 	if e.OperationID == nil {
 		return ""
 	}
-	if strings.HasSuffix(e.Action, ".modify") {
+	switch operationKind(e) {
+	case "Modification":
 		return "/modifications/" + strconv.Itoa(*e.OperationID)
+	case "Removal":
+		return "/removals/" + strconv.Itoa(*e.OperationID)
 	}
 	return "/imports/" + strconv.Itoa(*e.OperationID)
 }
@@ -433,11 +462,4 @@ func auditValue(v any) string {
 		return string(b)
 	}
 	return valueString(v)
-}
-
-func firstAction(entries []auditEntry) string {
-	if len(entries) == 0 {
-		return ""
-	}
-	return entries[0].Action
 }

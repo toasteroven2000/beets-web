@@ -34,6 +34,11 @@ templ recordView(p recordPage) {
 					<div class="small text-body-secondary font-monospace text-break">{ p.Record.Str("path") }</div>
 				}
 			</div>
+			<form method="post" action="/removals" class="ms-auto">
+				<input type="hidden" name="scope" value={ string(p.Scope) }/>
+				<input type="hidden" name="id" value={ strconv.Itoa(p.Record.ID()) }/>
+				<button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash" aria-hidden="true"></i> Remove…</button>
+			</form>
 		</div>
 		if p.Scope == albums {
 			<ul class="nav nav-tabs mb-3">

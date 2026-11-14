@@ -39,6 +39,10 @@ _Avoid_: Edit, batch edit
 One requested Modify, from its Preview through to its outcome.
 _Avoid_: Edit, job
 
+**Removal**:
+One requested removal of the Albums or Items matched by a query, from its Preview through to its outcome. Confirming deletes their files as well as their records.
+_Avoid_: Delete, purge
+
 **Scope**:
 Whether a query (in a Modify or a list) matches Items or Albums, like `beet modify` with or without `-a`. One Modification has one Scope; Albums and Items are never mixed.
 _Avoid_: Kind, album flag, mode

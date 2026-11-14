@@ -155,7 +155,14 @@ func auditSummary(e auditEntry) string {
 		if n, ok := c["undo_of_import"]; ok {
 			return fmt.Sprintf("undid Import %s: removed “%s”", valueString(n), name)
 		}
-		return fmt.Sprintf("removed “%s” (replaced by %s)", name, asString(c["replaced_by"]))
+		if by, ok := c["replaced_by"]; ok {
+			return fmt.Sprintf("removed “%s” (replaced by %s)", name, asString(by))
+		}
+		s := fmt.Sprintf("removed “%s”, deleted %s", name, plural(len(asList(c["files"])), "file", "files"))
+		if left := len(asList(c["left_in_place"])); left > 0 {
+			s += fmt.Sprintf(", left %d outside the music directory", left)
+		}
+		return s
 	case e.Action == "art.upload":
 		_, n, _ := pairOf(c["artpath"])
 		return fmt.Sprintf("set %s, %s %s", path.Base(asString(n)), kbText(c["bytes"]), asString(c["format"]))
