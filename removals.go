@@ -61,14 +61,14 @@ func (s *server) handleRemoval(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	render(w, http.StatusOK, removalView(rm))
+	render(w, http.StatusOK, removalView(rm, rm.Status == "awaiting_confirmation" && s.trashMissing(r)))
 }
 
 func (s *server) handleRemovalConfirm(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	// A 409 means it was rejected as stale or already confirmed; the Removal
-	// page shows which.
-	if err := s.api.ConfirmRemoval(r.Context(), id); err != nil && !isStatus(err, http.StatusConflict) {
+	// A 409 means it was rejected as stale or already confirmed, which the
+	// Removal page shows; a missing Trash is said outright.
+	if err := s.api.ConfirmRemoval(r.Context(), id); err != nil && (isTrashError(err) || !isStatus(err, http.StatusConflict)) {
 		fail(w, err)
 		return
 	}

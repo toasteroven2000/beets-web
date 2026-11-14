@@ -14,12 +14,12 @@ func TestAuditListsChanges(t *testing.T) {
 			map[string]any{"id": 2, "recorded_at": "2026-11-09T22:40:00Z", "client": "beets-ui", "action": "album.modify", "target": "album:5", "operation_id": 7,
 				"changes": map[string]any{"year": map[string]any{"old": 1969, "new": 1970}}},
 			map[string]any{"id": 1, "recorded_at": "2026-11-09T22:39:00Z", "client": nil, "action": "art.remove", "target": "album:5", "operation_id": nil,
-				"changes": map[string]any{"artpath": map[string]any{"old": "/m/cover.jpg", "new": nil}, "archived": []any{3}}},
+				"changes": map[string]any{"artpath": map[string]any{"old": "/m/cover.jpg", "new": nil}, "trashed_to": []any{map[string]any{"from": "/m/cover.jpg", "to": "/trash/art/cover.jpg"}}}},
 		}})
 	}
 	rec := get(t, h, "/audit?target=album:5&action=album.modify")
 	// Each change reads as one line, and the entry itself is a click away.
-	mustContain(t, rec, `href="/modifications/7"`, `href="/albums/5"`, "year 1969 → 1970", "removed cover.jpg, kept in the archive",
+	mustContain(t, rec, `href="/modifications/7"`, `href="/albums/5"`, "year 1969 → 1970", "removed cover.jpg, moved to the Trash",
 		`<a href="/audit/2">2</a>`, "2026-11-09T22:40:00.000+00:00", `<option value="album.modify" selected>`)
 	r, _ := f.last(t, "GET", "/audit")
 	if q := r.URL.Query(); q.Get("target") != "album:5" || q.Get("action") != "album.modify" {
@@ -124,7 +124,9 @@ func TestAuditSummaries(t *testing.T) {
 		{"album.remove", map[string]any{"removed": map[string]any{"album": map[string]any{"album": "Let It Be"}, "items": []any{}}, "files": []any{}, "undo_of_import": json.Number("9")}, "undid Import 9: removed “Let It Be”"},
 		{"item.remove", map[string]any{"removed": map[string]any{"title": "Airbag"}, "replaced_by": "item:2"}, "removed “Airbag” (replaced by item:2)"},
 		{"art.upload", map[string]any{"artpath": map[string]any{"old": nil, "new": "/m/cover.jpg"}, "bytes": json.Number("48152"), "format": "jpg"}, "set cover.jpg, 47 KB jpg"},
-		{"art.remove", map[string]any{"artpath": map[string]any{"old": "/m/cover.jpg", "new": nil}, "archived": []any{}}, "removed cover.jpg"},
+		{"art.remove", map[string]any{"artpath": map[string]any{"old": "/m/cover.jpg", "new": nil}, "trashed_to": []any{}}, "removed cover.jpg"},
+		{"trash.purge", map[string]any{"files": json.Number("12"), "bytes": json.Number("3250585")}, "purged 12 files · 3.1 MB"},
+		{"album.remove", map[string]any{"removed": map[string]any{"album": "X"}, "trashed_to": []any{map[string]any{"from": "/a", "to": "/t/a"}}, "left_in_place": []any{}}, "removed “X”, moved 1 file to the Trash"},
 	} {
 		if got := auditSummary(auditEntry{Action: c.action, Changes: c.changes}); got != c.want {
 			t.Errorf("%s: %q, want %q", c.action, got, c.want)

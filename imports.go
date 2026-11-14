@@ -657,7 +657,7 @@ func (s *server) handleImportChoice(w http.ResponseWriter, r *http.Request) {
 			req.Artist, req.Name = &artist, &name
 		}
 	}
-	// Remove old deletes files, so it asks first.
+	// Remove old moves files to the Trash, so it asks first.
 	if req.Action == "remove" && f.Get("confirm") == "" {
 		op, err := s.api.Import(r.Context(), id)
 		if err != nil {
@@ -668,12 +668,13 @@ func (s *server) handleImportChoice(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/imports/"+url.PathEscape(id)+"?stale=1", http.StatusSeeOther)
 			return
 		}
-		render(w, http.StatusOK, importRemoveView(op))
+		render(w, http.StatusOK, importRemoveView(op, s.trashMissing(r)))
 		return
 	}
 	err := s.api.ImportChoice(r.Context(), id, req)
 	// 409: the prompt moved on or the Import ended; the page shows where it is.
-	if isStatus(err, http.StatusConflict) {
+	// But not when it is the Trash that is missing, which the page can't show.
+	if isStatus(err, http.StatusConflict) && !isTrashError(err) {
 		http.Redirect(w, r, "/imports/"+url.PathEscape(id)+"?stale=1", http.StatusSeeOther)
 		return
 	}
@@ -753,23 +754,6 @@ func (s *server) handleImportUndoConfirm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	http.Redirect(w, r, "/audit?"+url.Values{"operation": {id}}.Encode(), http.StatusSeeOther)
-}
-
-// undoModeText says in words what the Import did with its files.
-func undoModeText(mode string) string {
-	switch mode {
-	case "copy":
-		return "copied"
-	case "move":
-		return "moved"
-	case "copy_delete":
-		return "copied, then deleted the originals of,"
-	case "link":
-		return "linked"
-	case "in_place":
-		return "added in place"
-	}
-	return "imported"
 }
 
 // importedCount is how many Items an Import put in the Library.

@@ -52,7 +52,7 @@ These features need endpoints that beets-api doesn't have yet. Until they exist,
 
 ## Album art
 
-The Art tab searches the iTunes Search API and the Deezer API (no keys), and fetches images from URLs you enter, so beets-ui needs outbound HTTPS. Set art sends the image to beets-api's `PUT /albums/{id}/art`, which saves it as `cover.jpg` or `cover.png`; Remove art calls `DELETE /albums/{id}/art`. beets-api archives replaced and removed art. Every request carries `X-Beets-API-Client: beets-ui`, so beets-api's audit shows which changes came from the UI. When an Album already has art, the UI shows the current and new art side by side first; the fetched image waits in memory for up to an hour.
+The Art tab searches the iTunes Search API and the Deezer API (no keys), and fetches images from URLs you enter, so beets-ui needs outbound HTTPS. Set art sends the image to beets-api's `PUT /albums/{id}/art`, which saves it as `cover.jpg` or `cover.png`; Remove art calls `DELETE /albums/{id}/art`. beets-api moves replaced and removed art to its Trash. Every request carries `X-Beets-API-Client: beets-ui`, so beets-api's audit shows which changes came from the UI. When an Album already has art, the UI shows the current and new art side by side first; the fetched image waits in memory for up to an hour.
 
 ## Import
 
@@ -64,7 +64,13 @@ beets-api only accepts `Host: 127.0.0.1` or `localhost`, so beets-ui in another 
 
 ## Remove
 
-Every Album and Item list has **Remove selected** and **Remove all N** (the latter only when the list has a query), and each Album and Item page has **Remove…**. They ask beets-api for a Removal Preview (`POST /removals`), which lists what would go and how many files would be deleted, and nothing is removed until you confirm on that page. Confirming removes the records and deletes their files from disk, which can't be undone; files outside the music directory are left where they are. Removals are listed under the person menu, and each removed Album or Item is in the Audit, linked to its Removal.
+Every Album and Item list has **Remove selected** and **Remove all N** (the latter only when the list has a query), and each Album and Item page has **Remove…**. They ask beets-api for a Removal Preview (`POST /removals`), which lists what would go and how many files would be deleted, and nothing is removed until you confirm on that page. Confirming removes the records and moves their files to beets-api's Trash, where they stay until you Purge it from the Trash page; files outside the music directory are left where they are. beets-api refuses to remove anything while `BEETS_API_TRASH_DIR` is unset, and the page says so. Removals are listed under the person menu, and each removed Album or Item is in the Audit, linked to its Removal.
+
+## Trash and Purge
+
+beets-api never deletes a file: removals, Import undo, a duplicate replaced by an Import, and replaced or removed art all move files into its **Trash**, one folder per operation. The Trash page (person menu) lists the folders with their size, age, what made them and who, and offers **Purge selected…**, **Purge everything older than…** and **Purge everything…**. Each asks beets-api for a Purge Preview (`POST /purges`) and deletes nothing until you confirm on that page, which says how many files and bytes go. A Purge is the one step that can't be undone. Purges are listed under Purge history, and each folder it deletes is in the Audit as `trash.purge`.
+
+The Trash is off until beets-api has `BEETS_API_TRASH_DIR`. While it is unset beets-api refuses everything that would delete a file, and beets-ui says so on the Removal, Remove old and Purge pages and disables their confirm buttons, instead of leaving a refusal looking like a stale Preview. There is no way to put trashed files back yet.
 
 ## Who is making a change
 

@@ -225,6 +225,21 @@ templ changeValue(c changeView) {
 			for _, l := range c.Lines {
 				<div class="font-monospace small text-break">{ l }</div>
 			}
+		case "moves":
+			<details>
+				<summary>{ plural(len(c.Moves), "file", "files") } moved to the Trash</summary>
+				<table class="table table-sm table-borderless mb-0 mt-1 small">
+					<tbody>
+						for _, m := range c.Moves {
+							<tr>
+								<td class="font-monospace text-break">{ m[0] }</td>
+								<td><i class="bi bi-arrow-right text-body-secondary" aria-hidden="true"></i></td>
+								<td class="font-monospace text-break">{ m[1] }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</details>
 		case "files":
 			<details>
 				<summary>{ plural(len(c.Files), "file", "files") }</summary>

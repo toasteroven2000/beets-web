@@ -402,7 +402,7 @@ func (c *beetsAPI) SetAlbumArt(ctx context.Context, id int, data []byte) error {
 	return nil
 }
 
-// RemoveAlbumArt clears an Album's art. beets-api archives the image first.
+// RemoveAlbumArt clears an Album's art. beets-api moves the image to the Trash.
 func (c *beetsAPI) RemoveAlbumArt(ctx context.Context, id int) error {
 	return c.do(ctx, http.MethodDelete, "/albums/"+strconv.Itoa(id)+"/art", nil, nil, nil)
 }
@@ -735,5 +735,98 @@ func (c *beetsAPI) Removals(ctx context.Context, limit, offset int) (removalList
 	v := url.Values{"limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}
 	var out removalList
 	err := c.do(ctx, http.MethodGet, "/removals", v, nil, &out)
+	return out, err
+}
+
+// trashFolder is one folder of the Trash: what one operation moved there.
+type trashFolder struct {
+	Name        string   `json:"name"`
+	Files       int      `json:"files"`
+	Bytes       int64    `json:"bytes"`
+	Modified    string   `json:"modified"`
+	Fingerprint string   `json:"fingerprint"`
+	OperationID *int     `json:"operation_id"`
+	Actions     []string `json:"actions"`
+	Actors      []string `json:"actors"`
+}
+
+// trashInfo is the Trash. Until beets-api is given a directory for it, it
+// refuses everything that would delete a file.
+type trashInfo struct {
+	Configured bool          `json:"configured"`
+	Folders    []trashFolder `json:"folders"`
+}
+
+type purgeRequest struct {
+	Folders   []string `json:"folders,omitempty"`
+	OlderThan string   `json:"older_than,omitempty"`
+}
+
+type purgeResult struct {
+	Preview struct {
+		Folders []trashFolder `json:"folders"`
+	} `json:"preview"`
+	TrashConfigured bool     `json:"trash_configured"`
+	Purged          []string `json:"purged"`
+	Failed          []struct {
+		Name  string `json:"name"`
+		Error string `json:"error"`
+	} `json:"failed"`
+	Stale []string `json:"stale"`
+	Error string   `json:"error"`
+}
+
+// purge is one requested deletion of Trash folders, from its Preview to its outcome.
+type purge struct {
+	ID        opID         `json:"id"`
+	Status    string       `json:"status"`
+	Request   purgeRequest `json:"request"`
+	Result    purgeResult  `json:"result"`
+	CreatedAt string       `json:"created_at"`
+}
+
+type purgeSummary struct {
+	ID      opID         `json:"id"`
+	Status  string       `json:"status"`
+	Request purgeRequest `json:"request"`
+	Counts  struct {
+		Folders int `json:"folders"`
+		Purged  int `json:"purged"`
+		Failed  int `json:"failed"`
+	} `json:"counts"`
+	CreatedAt string `json:"created_at"`
+}
+
+type purgeList struct {
+	Total   int            `json:"total"`
+	Results []purgeSummary `json:"results"`
+}
+
+func (c *beetsAPI) Trash(ctx context.Context) (trashInfo, error) {
+	var out trashInfo
+	err := c.do(ctx, http.MethodGet, "/trash", nil, nil, &out)
+	return out, err
+}
+
+func (c *beetsAPI) CreatePurge(ctx context.Context, req purgeRequest) (purge, error) {
+	var out purge
+	err := c.do(ctx, http.MethodPost, "/purges", nil, req, &out)
+	return out, err
+}
+
+func (c *beetsAPI) Purge(ctx context.Context, id string) (purge, error) {
+	var out purge
+	err := c.do(ctx, http.MethodGet, "/purges/"+url.PathEscape(id), nil, nil, &out)
+	return out, err
+}
+
+func (c *beetsAPI) ConfirmPurge(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodPost, "/purges/"+url.PathEscape(id)+"/confirm", nil, nil, nil)
+}
+
+func (c *beetsAPI) Purges(ctx context.Context, limit, offset int) (purgeList, error) {
+	v := url.Values{"limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}
+	var out purgeList
+	err := c.do(ctx, http.MethodGet, "/purges", v, nil, &out)
 	return out, err
 }

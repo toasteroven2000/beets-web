@@ -4,7 +4,7 @@ import "strconv"
 
 // removalView shows a Removal: its Preview and, once the Preview is
 // confirmed, how it went. It deletes files, so it says so before it asks.
-templ removalView(rm removal) {
+templ removalView(rm removal, trashMissing bool) {
 	@layout("Removal", "Removals") {
 		{{ id := string(rm.ID) }}
 		<nav aria-label="breadcrumb">
@@ -30,22 +30,25 @@ templ removalView(rm removal) {
 					<span>{ scopeOf(rm.Request.Scope).Title() } matching <code>{ rm.Request.Query }</code></span>
 				</div>
 			</div>
-			@removalOutcome(rm)
+			@removalOutcome(rm, trashMissing)
 			@removalPreview(rm)
 		</div>
 	}
 }
 
-templ removalOutcome(rm removal) {
+templ removalOutcome(rm removal, trashMissing bool) {
 	{{ id := string(rm.ID) }}
 	switch rm.Status {
 		case "awaiting_confirmation":
 			<div class="alert alert-danger">
-				<strong>Confirming removes { removalPreviewCount(rm) } from the Library and deletes { plural(removalFileCount(rm), "file", "files") } from disk.</strong>
-				Nothing archives them, and it can't be undone. Files outside the music directory are left where they are.
+				<strong>Confirming removes { removalPreviewCount(rm) } from the Library and moves { plural(removalFileCount(rm), "file", "files") } to the Trash.</strong>
+				They stay there until the Trash is purged, and nothing here puts them back. Files outside the music directory are left where they are.
 			</div>
+			if trashMissing {
+				@trashMissingAlert()
+			}
 			<form method="post" action={ templ.URL("/removals/" + id + "/confirm") } class="d-flex flex-wrap gap-2 align-items-center mb-3">
-				<button class="btn btn-danger"><i class="bi bi-trash" aria-hidden="true"></i> Remove { removalPreviewCount(rm) } and delete the files</button>
+				<button class="btn btn-danger" disabled?={ trashMissing }><i class="bi bi-trash" aria-hidden="true"></i> Remove { removalPreviewCount(rm) }</button>
 				<a href="javascript:history.back()" class="btn btn-outline-secondary">Cancel</a>
 				<span class="small text-body-secondary">Nothing is removed until you confirm.</span>
 			</form>
@@ -62,7 +65,8 @@ templ removalOutcome(rm removal) {
 			</div>
 		case "applied":
 			<div class="alert alert-success">
-				Removed { records(len(rm.Result.Removed)) }.
+				Removed { records(len(rm.Result.Removed)) }. Their files are in the Trash, in folder <code>{ id }</code>:
+				<a href="/trash">Trash</a> ·
 				<a href={ templ.URL("/audit?operation=" + id) }>What it removed, in the Audit</a>
 			</div>
 		case "partial":

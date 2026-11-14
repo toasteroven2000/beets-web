@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -20,7 +21,7 @@ func auditVerb(action string) string {
 // auditTone is the Bootstrap colour for an action.
 func auditTone(action string) string {
 	switch {
-	case action == "art.remove":
+	case action == "art.remove" || action == "trash.purge":
 		return "danger"
 	case auditVerb(action) == "modify":
 		return "primary"
@@ -38,6 +39,8 @@ func auditIcon(action string) string {
 	switch {
 	case action == "art.remove":
 		return "x-square"
+	case action == "trash.purge":
+		return "fire"
 	case auditVerb(action) == "modify":
 		return "pencil-square"
 	case auditVerb(action) == "import":
@@ -158,7 +161,7 @@ func auditSummary(e auditEntry) string {
 		if by, ok := c["replaced_by"]; ok {
 			return fmt.Sprintf("removed “%s” (replaced by %s)", name, asString(by))
 		}
-		s := fmt.Sprintf("removed “%s”, deleted %s", name, plural(len(asList(c["files"])), "file", "files"))
+		s := fmt.Sprintf("removed “%s”, moved %s to the Trash", name, plural(len(asList(c["trashed_to"])), "file", "files"))
 		if left := len(asList(c["left_in_place"])); left > 0 {
 			s += fmt.Sprintf(", left %d outside the music directory", left)
 		}
@@ -166,10 +169,17 @@ func auditSummary(e auditEntry) string {
 	case e.Action == "art.upload":
 		_, n, _ := pairOf(c["artpath"])
 		return fmt.Sprintf("set %s, %s %s", path.Base(asString(n)), kbText(c["bytes"]), asString(c["format"]))
+	case e.Action == "trash.purge":
+		files := 0
+		if n, err := strconv.Atoi(valueString(c["files"])); err == nil {
+			files = n
+		}
+		size, _ := strconv.ParseInt(valueString(c["bytes"]), 10, 64)
+		return fmt.Sprintf("purged %s · %s", plural(files, "file", "files"), bytesText(size))
 	case e.Action == "art.remove":
 		o, _, _ := pairOf(c["artpath"])
-		if len(asList(c["archived"])) > 0 {
-			return "removed " + path.Base(asString(o)) + ", kept in the archive"
+		if len(asList(c["trashed_to"])) > 0 {
+			return "removed " + path.Base(asString(o)) + ", moved to the Trash"
 		}
 		return "removed " + path.Base(asString(o))
 	}
@@ -211,6 +221,7 @@ type changeView struct {
 	// the rest
 	Lines []string
 	Files []fileRow
+	Moves [][2]string // files moved to the Trash: from, to
 	Rows  [][2]string
 	Text  string
 }
@@ -263,6 +274,19 @@ func changeViews(changes map[string]any) []changeView {
 func listChange(c changeView, l []any) changeView {
 	if len(l) == 0 {
 		c.Kind, c.Text = "text", "none"
+		return c
+	}
+	var moves [][2]string
+	for _, i := range l {
+		m := asMap(i)
+		if m == nil || asString(m["from"]) == "" || asString(m["to"]) == "" {
+			moves = nil
+			break
+		}
+		moves = append(moves, [2]string{asString(m["from"]), asString(m["to"])})
+	}
+	if moves != nil {
+		c.Kind, c.Moves = "moves", moves
 		return c
 	}
 	var files []fileRow

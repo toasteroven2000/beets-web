@@ -413,6 +413,8 @@ func operationKind(e auditEntry) string {
 	switch {
 	case strings.HasSuffix(e.Action, ".modify"):
 		return "Modification"
+	case e.Action == "trash.purge":
+		return "Purge"
 	case strings.HasSuffix(e.Action, ".remove") && !replaced && !undone:
 		return "Removal"
 	}
@@ -436,12 +438,14 @@ func operationURL(e auditEntry) string {
 		return "/modifications/" + strconv.Itoa(*e.OperationID)
 	case "Removal":
 		return "/removals/" + strconv.Itoa(*e.OperationID)
+	case "Purge":
+		return "/purges/" + strconv.Itoa(*e.OperationID)
 	}
 	return "/imports/" + strconv.Itoa(*e.OperationID)
 }
 
 // auditActions are the actions beets-api records, for the filter.
-var auditActions = []string{"album.modify", "item.modify", "album.import", "item.import", "album.remove", "item.remove", "art.upload", "art.remove"}
+var auditActions = []string{"album.modify", "item.modify", "album.import", "item.import", "album.remove", "item.remove", "art.upload", "art.remove", "trash.purge"}
 
 func (p auditPage) URL(offset int) string {
 	v := url.Values{}
@@ -476,6 +480,9 @@ func auditTarget(k scope, id int) string { return k.API() + ":" + strconv.Itoa(i
 // targetURL links an Audit target ("album:5") to its record page.
 func targetURL(target string) string {
 	model, id, ok := strings.Cut(target, ":")
+	if ok && model == "trash" { // a purged Trash folder: the Trash is where to look
+		return "/trash"
+	}
 	n, err := strconv.Atoi(id)
 	if !ok || err != nil {
 		return ""

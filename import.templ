@@ -507,7 +507,7 @@ templ importUndoView(op importOp, plan undoPlan) {
 			</ol>
 		</nav>
 		if plan.Allowed {
-			@pageHeader("Undo Import "+id+"?", "beets removes what this Import added from the Library and deletes the files it "+undoModeText(plan.Mode)+" in. Your originals in the Import Path stay. Nothing archives the removed files.") {
+			@pageHeader("Undo Import "+id+"?", "beets removes what this Import added from the Library and moves the files it copied in to the Trash, where they stay until it is purged. Your originals in the Import Path stay.") {
 			}
 		} else {
 			@pageHeader("Import "+id+" can't be undone", "") {
@@ -569,7 +569,7 @@ templ importUndoView(op importOp, plan undoPlan) {
 }
 
 // importRemoveView asks before "Remove old", which deletes files.
-templ importRemoveView(op importOp) {
+templ importRemoveView(op importOp, trashMissing bool) {
 	{{ id := string(op.ID) }}
 	{{ p := *op.Result.Prompt }}
 	@layout("Remove old · Import "+id, "Import") {
@@ -580,7 +580,10 @@ templ importRemoveView(op importOp) {
 				<li class="breadcrumb-item active" aria-current="page">Remove old</li>
 			</ol>
 		</nav>
-		@pageHeader("Remove these from the Library?", "beets removes them and deletes their files, then imports the new files. Nothing archives the old files.") {
+		@pageHeader("Remove these from the Library?", "beets removes them from the Library and moves their files to the Trash, where they stay until it is purged. Then it imports the new files.") {
+		}
+		if trashMissing {
+			@trashMissingAlert()
 		}
 		<ul>
 			for _, r := range p.Existing {
@@ -590,7 +593,7 @@ templ importRemoveView(op importOp) {
 		<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="d-flex gap-2">
 			<input type="hidden" name="prompt_id" value={ p.ID }/>
 			<input type="hidden" name="confirm" value="1"/>
-			<button class="btn btn-danger" name="action" value="remove"><i class="bi bi-trash" aria-hidden="true"></i> Remove old and import</button>
+			<button class="btn btn-danger" name="action" value="remove" disabled?={ trashMissing }><i class="bi bi-trash" aria-hidden="true"></i> Remove old and import</button>
 			<a class="btn btn-outline-secondary" href={ templ.URL("/imports/" + id) }>Cancel</a>
 		</form>
 	}

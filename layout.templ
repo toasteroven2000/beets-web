@@ -39,6 +39,7 @@ templ layout(title string, active string) {
 									@menuLink("/profile", "person-vcard", "Profile", active)
 									@menuLink("/modifications", "pencil-square", "Modifications", active)
 									@menuLink("/removals", "trash", "Removals", active)
+									@menuLink("/trash", "recycle", "Trash", active)
 									@menuLink("/audit", "journal-text", "Audit", active)
 								</ul>
 							</li>
@@ -81,7 +82,7 @@ templ navLink(href, iconName, label, active string) {
 
 // userMenuActive tells whether the page is one the person's menu holds.
 func userMenuActive(active string) bool {
-	return active == "Profile" || active == "Modifications" || active == "Removals" || active == "Audit"
+	return active == "Profile" || active == "Modifications" || active == "Removals" || active == "Trash" || active == "Audit"
 }
 
 templ menuLink(href, iconName, label, active string) {

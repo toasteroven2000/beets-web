@@ -131,7 +131,7 @@ templ artCompareView(p artComparePage) {
 				<li class="breadcrumb-item active" aria-current="page">Set art</li>
 			</ol>
 		</nav>
-		@pageHeader("Replace the art of "+title, "beets-api archives the current art before replacing it.") {
+		@pageHeader("Replace the art of "+title, "beets-api moves the current art to the Trash before replacing it.") {
 		}
 		<div class="row g-4 mb-4">
 			<div class="col-md-6">
@@ -174,7 +174,7 @@ templ artRemoveView(album record, current artInfo) {
 				<li class="breadcrumb-item active" aria-current="page">Remove art</li>
 			</ol>
 		</nav>
-		@pageHeader("Remove the art of "+title+"?", "beets-api archives the image before deleting its file; the UI can't bring it back.") {
+		@pageHeader("Remove the art of "+title+"?", "beets-api moves the image to the Trash, where it stays until the Trash is purged. The UI can't put it back.") {
 		}
 		<div class="mb-4 art-remove">
 			<a href={ templ.URL(artURL(id)) } target="_blank" rel="noopener">

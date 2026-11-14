@@ -71,8 +71,8 @@ func TestRemovalPreviewWarnsAboutDeletingFilesBeforeAsking(t *testing.T) {
 	}
 	rec := get(t, h, "/removals/9")
 	mustContain(t, rec, "Removal 9", "2026-11-14T10:00:00.123+00:00", "awaiting confirmation",
-		"removes 1 Album from the Library and deletes 3 files from disk", "it can't be undone",
-		`action="/removals/9/confirm"`, "Remove 1 Album and delete the files",
+		"removes 1 Album from the Library and moves 3 files to the Trash", "until the Trash is purged",
+		`action="/removals/9/confirm"`, "Remove 1 Album</button>",
 		`href="/albums/1"`, "AC/DC - Back in Black", "2 files", "/m/AC_DC/Back in Black/01.mp3", "cover.jpg")
 }
 
@@ -83,7 +83,7 @@ func TestRemovalStatuses(t *testing.T) {
 	}
 	serve("applied", map[string]any{"removed": []any{map[string]any{"kind": "albums", "id": 1}}})
 	rec := get(t, h, "/removals/9")
-	mustContain(t, rec, "Removed 1 record", `href="/audit?operation=9"`)
+	mustContain(t, rec, "Removed 1 record", "in folder <code>9</code>", `href="/trash"`, `href="/audit?operation=9"`)
 	if strings.Contains(rec.Body.String(), "/confirm") {
 		t.Error("an applied Removal can be confirmed again")
 	}
@@ -180,7 +180,7 @@ func TestAuditLinksARemovalAndSummarizesIt(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"total": 3, "results": []any{
 			// a Removal
 			map[string]any{"id": 3, "recorded_at": "2026-11-14T10:00:00Z", "action": "album.remove", "target": "album:1", "operation_id": 9,
-				"changes": map[string]any{"removed": map[string]any{"album": map[string]any{"album": "Back in Black"}, "items": []any{}}, "files": []any{"/a", "/b"}, "left_in_place": []any{"/elsewhere/c"}}},
+				"changes": map[string]any{"removed": map[string]any{"album": map[string]any{"album": "Back in Black"}, "items": []any{}}, "trashed_to": []any{map[string]any{"from": "/a", "to": "/t/9/a"}, map[string]any{"from": "/b", "to": "/t/9/b"}}, "left_in_place": []any{"/elsewhere/c"}}},
 			// an Import replacing a duplicate, and an Import being undone: still Imports
 			map[string]any{"id": 2, "recorded_at": "2026-11-14T09:00:00Z", "action": "album.remove", "target": "album:4", "operation_id": 7,
 				"changes": map[string]any{"removed": map[string]any{"album": "Old"}, "replaced_by": "album:6"}},
@@ -189,7 +189,7 @@ func TestAuditLinksARemovalAndSummarizesIt(t *testing.T) {
 		}})
 	}
 	rec := get(t, h, "/audit")
-	mustContain(t, rec, `href="/removals/9"`, "Removal 9", "removed “Back in Black”, deleted 2 files, left 1 outside the music directory",
+	mustContain(t, rec, `href="/removals/9"`, "Removal 9", "removed “Back in Black”, moved 2 files to the Trash, left 1 outside the music directory",
 		`href="/imports/7"`, `href="/imports/6"`)
 	// Filtered to a Removal, the page names it as one.
 	rec = get(t, h, "/audit?operation=9")
@@ -208,6 +208,7 @@ func TestOperationKind(t *testing.T) {
 		{"item.remove", map[string]any{"removed": map[string]any{}, "files": []any{}, "left_in_place": []any{}}, "Removal"},
 		{"album.remove", map[string]any{"replaced_by": "album:2"}, "Import"},
 		{"item.remove", map[string]any{"undo_of_import": 3}, "Import"},
+		{"trash.purge", map[string]any{"files": 3}, "Purge"},
 		{"art.upload", nil, "Import"},
 	} {
 		if got := operationKind(auditEntry{Action: c.action, Changes: c.changes}); got != c.want {

@@ -1,0 +1,269 @@
+package main
+
+import "strconv"
+
+// trashMissingAlert says why nothing can be removed: beets-api has no
+// directory to move files to.
+templ trashMissingAlert() {
+	<div class="alert alert-warning">
+		<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+		The Trash isn't set up, so beets-api refuses to remove anything. Set <code>BEETS_API_TRASH_DIR</code> to a directory for it, outside the music directory and the Import Paths, and restart beets-api.
+	</div>
+}
+
+// trashView lists what beets-api has moved to the Trash, a folder per
+// operation, and offers to purge it.
+templ trashView(info trashInfo) {
+	@layout("Trash", "Trash") {
+		@pageHeader("Trash", "Files that were removed or replaced wait here until you purge them") {
+			<a class="btn btn-sm btn-outline-secondary" href="/purges"><i class="bi bi-clock-history" aria-hidden="true"></i> Purge history</a>
+		}
+		if !info.Configured {
+			@trashMissingAlert()
+		} else if len(info.Folders) == 0 {
+			<p class="text-body-secondary">The Trash is empty.</p>
+		} else {
+			<form method="post" action="/purges">
+				<div class="d-flex flex-wrap gap-2 mb-2">
+					<button class="btn btn-sm btn-outline-danger"><i class="bi bi-fire" aria-hidden="true"></i> Purge selected…</button>
+					<span class="small text-body-secondary align-self-center">{ plural(len(info.Folders), "folder", "folders") } · { trashSize(info) }</span>
+				</div>
+				<div class="table-responsive">
+					<table class="table table-sm table-hover align-middle trash-table">
+						<thead>
+							<tr>
+								<th class="select-col"><input class="form-check-input" type="checkbox" aria-label="Select all" data-select-all/></th>
+								<th>Folder</th>
+								<th>From</th>
+								<th>By</th>
+								<th class="text-end">Files</th>
+								<th class="text-end">Size</th>
+								<th>Last changed</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, f := range info.Folders {
+								<tr>
+									<td class="select-col"><input class="form-check-input" type="checkbox" name="folder" value={ f.Name } aria-label={ "Select " + f.Name }/></td>
+									<td class="font-monospace small">{ f.Name }</td>
+									<td class="small">
+										if f.OperationID != nil {
+											<a href={ templ.URL("/audit?operation=" + strconv.Itoa(*f.OperationID)) }>
+												for i, a := range f.Actions {
+													if i > 0 {
+														,
+													}
+													{ a }
+												}
+											</a>
+										} else {
+											<span class="text-body-secondary">Art changed on its own</span>
+										}
+									</td>
+									<td class="small">
+										for i, a := range f.Actors {
+											if i > 0 {
+												,
+											}
+											{ a }
+										}
+									</td>
+									<td class="text-end">{ strconv.Itoa(f.Files) }</td>
+									<td class="text-end text-nowrap">{ bytesText(f.Bytes) }</td>
+									<td class="small text-nowrap">{ msTime(f.Modified) }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</form>
+			<div class="d-flex flex-wrap gap-4 mt-3">
+				<form method="post" action="/purges" class="d-flex gap-2 align-items-center">
+					<label class="small" for="older-than">Purge everything older than</label>
+					<select class="form-select form-select-sm w-auto" id="older-than" name="older_than_days">
+						<option value="1">1 day</option>
+						<option value="7" selected>7 days</option>
+						<option value="30">30 days</option>
+						<option value="90">90 days</option>
+					</select>
+					<button class="btn btn-sm btn-outline-danger"><i class="bi bi-fire" aria-hidden="true"></i> Purge…</button>
+				</form>
+				<form method="post" action="/purges">
+					<input type="hidden" name="all" value="1"/>
+					<button class="btn btn-sm btn-outline-danger"><i class="bi bi-fire" aria-hidden="true"></i> Purge everything…</button>
+				</form>
+			</div>
+			<p class="small text-body-secondary mt-3">Each of these only asks for a Preview. Nothing is deleted until you confirm it.</p>
+		}
+	}
+}
+
+func trashSize(info trashInfo) string {
+	var n int64
+	for _, f := range info.Folders {
+		n += f.Bytes
+	}
+	return bytesText(n)
+}
+
+// purgeView shows a Purge: what it would delete and, once confirmed, how it
+// went. It is the one step that can't be undone, so it says so before it asks.
+templ purgeView(p purge, trashMissing bool) {
+	@layout("Purge", "Trash") {
+		{{ id := string(p.ID) }}
+		<nav aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href="/trash">Trash</a></li>
+				<li class="breadcrumb-item"><a href="/purges">Purges</a></li>
+				<li class="breadcrumb-item active" aria-current="page">Purge { id }</li>
+			</ol>
+		</nav>
+		@pageHeader("Purge "+id, msTime(p.CreatedAt)) {
+		}
+		<div
+			id="purge"
+			if inProgress(p.Status) {
+				hx-get={ "/purges/" + id }
+				hx-trigger="every 1s"
+				hx-select="#purge"
+				hx-swap="outerHTML"
+			}
+		>
+			<div class="card mb-3">
+				<div class="card-body d-flex flex-wrap gap-2 align-items-center">
+					<span class={ "badge", statusClass(p.Status) }>{ statusText(p.Status) }</span>
+					<span>{ purgeWhat(p.Request) }</span>
+				</div>
+			</div>
+			@purgeOutcome(p, trashMissing)
+			@purgePreview(p)
+		</div>
+	}
+}
+
+templ purgeOutcome(p purge, trashMissing bool) {
+	{{ id := string(p.ID) }}
+	{{ files, size := purgeTotals(p) }}
+	switch p.Status {
+		case "awaiting_confirmation":
+			<div class="alert alert-danger">
+				<strong>Confirming deletes { plural(files, "file", "files") } ({ bytesText(size) }) from { plural(len(p.Result.Preview.Folders), "folder", "folders") } { "for good." }</strong>
+				This can't be undone: nothing else keeps these files.
+			</div>
+			if trashMissing {
+				@trashMissingAlert()
+			}
+			<form method="post" action={ templ.URL("/purges/" + id + "/confirm") } class="d-flex flex-wrap gap-2 align-items-center mb-3">
+				<button class="btn btn-danger" disabled?={ trashMissing }><i class="bi bi-fire" aria-hidden="true"></i> Delete { plural(files, "file", "files") } { "for good" }</button>
+				<a href="javascript:history.back()" class="btn btn-outline-secondary">Cancel</a>
+				<span class="small text-body-secondary">Nothing is deleted until you confirm.</span>
+			</form>
+		case "no_changes":
+			<div class="alert alert-info">Nothing in the Trash matches, so there is nothing to purge.</div>
+		case "queued":
+			<div class="alert alert-info">Queued behind another Purge…</div>
+		case "applying":
+			<div class="alert alert-info">Purging… { strconv.Itoa(len(p.Result.Purged)+len(p.Result.Failed)) } of { strconv.Itoa(len(p.Result.Preview.Folders)) } folders done.</div>
+		case "applied":
+			<div class="alert alert-success">
+				Purged { plural(len(p.Result.Purged), "folder", "folders") }.
+				<a href={ templ.URL("/audit?operation=" + id) }>What it deleted, in the Audit</a>
+			</div>
+		case "partial":
+			<div class="alert alert-danger">
+				Purged { plural(len(p.Result.Purged), "folder", "folders") }; { strconv.Itoa(len(p.Result.Failed)) } failed.
+				if p.Result.Error != "" {
+					<div class="small">{ p.Result.Error }</div>
+				}
+				<ul class="mb-0 mt-2 small">
+					for _, f := range p.Result.Failed {
+						<li><code>{ f.Name }</code>: { f.Error }</li>
+					}
+				</ul>
+			</div>
+		case "rejected":
+			<div class="alert alert-warning">
+				The Trash changed after this Preview, so nothing was deleted. Changed since:
+				<ul class="small mt-2">
+					for _, n := range p.Result.Stale {
+						<li><code>{ n }</code></li>
+					}
+				</ul>
+				<form method="post" action={ templ.URL("/purges/" + id + "/again") }>
+					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
+				</form>
+			</div>
+		case "interrupted":
+			<div class="alert alert-warning">
+				beets-api restarted while this was running. { plural(len(p.Result.Purged), "folder", "folders") } had been purged.
+				<form method="post" action={ templ.URL("/purges/" + id + "/again") } class="mt-2">
+					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
+				</form>
+			</div>
+	}
+}
+
+templ purgePreview(p purge) {
+	if len(p.Result.Preview.Folders) > 0 {
+		<table class="table table-sm align-middle">
+			<thead>
+				<tr><th>Folder</th><th class="text-end">Files</th><th class="text-end">Size</th><th>Last changed</th></tr>
+			</thead>
+			<tbody>
+				for _, f := range p.Result.Preview.Folders {
+					<tr>
+						<td class="font-monospace small">{ f.Name }</td>
+						<td class="text-end">{ strconv.Itoa(f.Files) }</td>
+						<td class="text-end text-nowrap">{ bytesText(f.Bytes) }</td>
+						<td class="small text-nowrap">{ msTime(f.Modified) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
+}
+
+templ purgesView(p purgesPage) {
+	@layout("Purges", "Trash") {
+		<nav aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href="/trash">Trash</a></li>
+				<li class="breadcrumb-item active" aria-current="page">Purges</li>
+			</ol>
+		</nav>
+		@pageHeader("Purges", "Every Purge, newest first. The Audit shows what each one deleted.") {
+		}
+		if len(p.Purges) == 0 {
+			<p class="text-body-secondary">No Purges yet.</p>
+		} else {
+			<table class="table table-sm table-hover align-middle">
+				<thead>
+					<tr><th>When</th><th>Status</th><th>What</th><th>Folders</th></tr>
+				</thead>
+				<tbody>
+					for _, r := range p.Purges {
+						<tr>
+							<td class="small"><a href={ templ.URL("/purges/" + string(r.ID)) }>{ msTime(r.CreatedAt) }</a></td>
+							<td><span class={ "badge", statusClass(r.Status) }>{ statusText(r.Status) }</span></td>
+							<td class="small">{ purgeWhat(r.Request) }</td>
+							<td class="small">
+								{ plural(r.Counts.Folders, "folder", "folders") }
+								if r.Counts.Failed > 0 {
+									<span class="text-danger">· { strconv.Itoa(r.Counts.Failed) } failed</span>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+			<div class="d-flex gap-2">
+				if p.Offset > 0 {
+					<a class="btn btn-sm btn-outline-secondary" href={ templ.URL("/purges?offset=" + strconv.Itoa(max(0, p.Offset-50))) }><i class="bi bi-chevron-left" aria-hidden="true"></i> Newer</a>
+				}
+				if p.Offset+len(p.Purges) < p.Total {
+					<a class="btn btn-sm btn-outline-secondary" href={ templ.URL("/purges?offset=" + strconv.Itoa(p.Offset+50)) }>Older <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+				}
+			</div>
+		}
+	}
+}
