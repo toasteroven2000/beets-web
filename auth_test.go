@@ -109,7 +109,11 @@ func TestNavbarHasThePersonsMenuWithProfileModificationsAndAudit(t *testing.T) {
 }
 
 func TestMenuIsHighlightedOnItsPages(t *testing.T) {
-	_, h := newTest(t)
+	f, h := newTest(t)
+	empty := func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"total": 0, "results": []any{}})
+	}
+	f.routes["GET /audit"], f.routes["GET /modifications"] = empty, empty
 	for path, want := range map[string]string{
 		"/audit": `<a class="dropdown-item active" aria-current="page" href="/audit">`, "/profile": `class="dropdown-item active" aria-current="page" href="/profile"`,
 		"/modifications": `class="dropdown-item active" aria-current="page" href="/modifications"`,

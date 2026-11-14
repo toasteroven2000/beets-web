@@ -24,11 +24,6 @@ func TestAuditListsChanges(t *testing.T) {
 	}
 }
 
-func TestAuditWithoutEndpointSaysSo(t *testing.T) {
-	_, h := newTest(t)
-	mustContain(t, get(t, h, "/audit"), "has no <code>GET /audit</code>")
-}
-
 func TestRecordPageLinksToItsAudit(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /items/5"] = func(w http.ResponseWriter, r *http.Request) {

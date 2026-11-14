@@ -302,9 +302,6 @@ func candidateFacts(c candidate) []factRow {
 		return nil
 	}
 	f := files[0].Fields
-	if f == nil { // a beets-api that sends only changes
-		f = files[0].Changes
-	}
 	keys := [][2]string{{"albumartist", "Album artist"}, {"album", "Album"}, {"date", "Release date"}, {"label", "Label"},
 		{"catalognum", "Catalogue no."}, {"country", "Country"}, {"media", "Media"}, {"albumtype", "Album type"}}
 	if c.Track != nil {
@@ -359,13 +356,6 @@ func lengthText(v any) string {
 	return fmt.Sprintf("%d:%02d", s/60, s%60)
 }
 
-// hasFields tells whether beets-api sent the properties a Candidate keeps as
-// well as those it changes; prompts from before it did only have changes.
-func hasFields(c candidate) bool {
-	files := candidateFiles(c)
-	return len(files) > 0 && files[0].Fields != nil
-}
-
 // trackRow is one file and the track it would become.
 type trackRow struct {
 	File                               string
@@ -378,22 +368,10 @@ type trackRow struct {
 // Changed tells whether Apply changes anything about the track.
 func (r trackRow) Changed() bool { return r.NumChanged || r.TitleChanged }
 
-// Title is the track's title once applied; a prompt from an older beets-api
-// sends none for tracks that stay the same, so those show their file.
-func (r trackRow) Title() string {
-	if r.NewTitle == "" && r.OldTitle == "" {
-		return r.File
-	}
-	return r.NewTitle
-}
-
 func candidateTracks(c candidate) []trackRow {
 	var rows []trackRow
 	for _, f := range candidateFiles(c) {
 		fields := f.Fields
-		if fields == nil {
-			fields = f.Changes
-		}
 		side := func(k string, old bool) string {
 			ch, ok := fields[k]
 			if !ok {
@@ -453,7 +431,7 @@ func (d discRows) Label(multi bool) string {
 }
 
 // candidateDiscs groups a Candidate's tracks by disc. Tracks with no disc
-// (an older beets-api, or singletons) all go in one group.
+// (singletons) all go in one group.
 func candidateDiscs(c candidate) []discRows {
 	var discs []discRows
 	at := map[string]int{}

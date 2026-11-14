@@ -80,11 +80,7 @@ func TestIDsQuery(t *testing.T) {
 	}
 }
 
-func TestLegacyAlbumRequestScope(t *testing.T) {
-	yes := true
-	if s := (modRequest{LegacyAlbum: &yes}).scope(); s != albums {
-		t.Errorf("legacy album: %s", s)
-	}
+func TestModRequestScope(t *testing.T) {
 	if s := (modRequest{Scope: "album"}).scope(); s != albums {
 		t.Errorf("scope album: %s", s)
 	}

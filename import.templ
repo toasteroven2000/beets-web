@@ -350,12 +350,6 @@ templ candidateCard(id string, p importPrompt, c candidate, best bool, mode impo
 					</form>
 				</div>
 			</div>
-			if !hasFields(c) {
-				<p class="small text-body-secondary">
-					<i class="bi bi-info-circle" aria-hidden="true"></i>
-					This prompt came from an older beets-api that only sent what Apply changes, so values that stay the same aren't shown. Search again to refresh it.
-				</p>
-			}
 			<div class="small text-body-secondary mb-1">
 				if n := changedFacts(facts); n > 0 {
 					{ c.DataSource } · { strconv.Itoa(n) } of { strconv.Itoa(len(facts)) } change
@@ -394,7 +388,7 @@ templ candidateCard(id string, p importPrompt, c candidate, best bool, mode impo
 												if r.TitleChanged {
 													@delta(r.OldTitle, r.NewTitle)
 												} else {
-													{ r.Title() }
+													{ r.NewTitle }
 												}
 												if r.NumChanged && r.OldNum != "" {
 													<span class="text-body-secondary">(was track { r.OldNum })</span>

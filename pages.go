@@ -106,10 +106,9 @@ type modifyPage struct {
 }
 
 type modificationsPage struct {
-	Mods        []modSummary
-	Total       int
-	Offset      int
-	Unavailable bool // beets-api has no GET /modifications yet
+	Mods   []modSummary
+	Total  int
+	Offset int
 }
 
 // popularFields are the fields most often changed, which a record's field list
@@ -290,14 +289,13 @@ func listURL(k scope, f filters, recent bool) string {
 func pathText(v any) string { return valueString(v) }
 
 type auditPage struct {
-	Entries     []auditEntry
-	Total       int
-	Offset      int
-	Target      string // e.g. album:5
-	Action      string
-	Actor       string
-	Operation   int  // a Modification's or Import's id, 0 for any
-	Unavailable bool // beets-api has no GET /audit yet
+	Entries   []auditEntry
+	Total     int
+	Offset    int
+	Target    string // e.g. album:5
+	Action    string
+	Actor     string
+	Operation int // a Modification's or Import's id, 0 for any
 }
 
 // OperationName names the Modification or Import the page is filtered to.

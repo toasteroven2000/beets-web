@@ -199,11 +199,7 @@ templ modificationsView(p modificationsPage) {
 	@layout("Modifications", "Modifications") {
 		@pageHeader("Modifications", "Every Modification, newest first. The Audit shows what each one changed.") {
 		}
-		if p.Unavailable {
-			<div class="alert alert-warning">
-				This beets-api has no <code>GET /modifications</code> yet, so there's no list to show. Each Modification's own page still works.
-			</div>
-		} else if len(p.Mods) == 0 {
+		if len(p.Mods) == 0 {
 			<p class="text-body-secondary">No Modifications yet.</p>
 		} else {
 			<table class="table table-sm table-hover align-middle">

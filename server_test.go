@@ -344,14 +344,6 @@ func TestPreviewAgainResendsRequest(t *testing.T) {
 	}
 }
 
-func TestModificationsWithoutEndpointSaysSo(t *testing.T) {
-	f, h := newTest(t)
-	f.routes["GET /modifications"] = func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 405, map[string]any{"detail": "Method Not Allowed"})
-	}
-	mustContain(t, get(t, h, "/modifications"), "has no <code>GET /modifications</code>")
-}
-
 func TestAlbumPageTabs(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /albums/2"] = func(w http.ResponseWriter, r *http.Request) {

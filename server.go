@@ -499,14 +499,11 @@ func (s *server) handleAgain(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleModifications(w http.ResponseWriter, r *http.Request) {
 	res, err := s.api.Modifications(r.Context(), 50, offsetParam(r))
-	p := modificationsPage{Mods: res.Results, Total: res.Total, Offset: offsetParam(r)}
-	if isStatus(err, http.StatusNotFound) || isStatus(err, http.StatusMethodNotAllowed) {
-		p.Unavailable = true
-	} else if err != nil {
+	if err != nil {
 		fail(w, err)
 		return
 	}
-	render(w, http.StatusOK, modificationsView(p))
+	render(w, http.StatusOK, modificationsView(modificationsPage{Mods: res.Results, Total: res.Total, Offset: offsetParam(r)}))
 }
 
 func (s *server) handleAudit(w http.ResponseWriter, r *http.Request) {
@@ -520,9 +517,7 @@ func (s *server) handleAudit(w http.ResponseWriter, r *http.Request) {
 		actions = []string{p.Action}
 	}
 	res, err := s.api.Audit(r.Context(), p.Target, actions, p.Operation, p.Actor, 50, p.Offset)
-	if isStatus(err, http.StatusNotFound) || isStatus(err, http.StatusMethodNotAllowed) {
-		p.Unavailable = true
-	} else if err != nil {
+	if err != nil {
 		fail(w, err)
 		return
 	}

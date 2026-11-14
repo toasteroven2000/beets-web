@@ -83,19 +83,17 @@ type artistsResult struct {
 	Results []artistSummary `json:"results"`
 }
 
-// modRequest is a Modify as beets-api takes it. Scope is "item" or "album";
-// Modifications made before beets-api had Scope recorded `album` instead.
+// modRequest is a Modify as beets-api takes it. Scope is "item" or "album".
 type modRequest struct {
-	Scope       string            `json:"scope"`
-	Query       string            `json:"query"`
-	Set         map[string]string `json:"set"`
-	Delete      []string          `json:"delete"`
-	LegacyAlbum *bool             `json:"album,omitempty"`
+	Scope  string            `json:"scope"`
+	Query  string            `json:"query"`
+	Set    map[string]string `json:"set"`
+	Delete []string          `json:"delete"`
 }
 
 // scope is which of Albums or Items the request matches.
 func (r modRequest) scope() scope {
-	if r.Scope == "album" || (r.Scope == "" && r.LegacyAlbum != nil && *r.LegacyAlbum) {
+	if r.Scope == "album" {
 		return albums
 	}
 	return items
@@ -337,7 +335,6 @@ func (c *beetsAPI) Artists(ctx context.Context, query string) (artistsResult, er
 
 func (c *beetsAPI) CreateModification(ctx context.Context, req modRequest) (modification, error) {
 	req.Scope = req.scope().API()
-	req.LegacyAlbum = nil
 	if req.Set == nil {
 		req.Set = map[string]string{}
 	}
@@ -366,8 +363,7 @@ func (c *beetsAPI) Modifications(ctx context.Context, limit, offset int) (modLis
 	return out, err
 }
 
-// AlbumArt fetches an Album's art. Not every beets-api has the endpoint yet,
-// so callers treat any error as "no art".
+// AlbumArt fetches an Album's art. Callers treat any error as "no art".
 func (c *beetsAPI) AlbumArt(ctx context.Context, id int) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/albums/"+strconv.Itoa(id)+"/art", nil)
 	if err != nil {
