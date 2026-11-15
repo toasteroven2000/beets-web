@@ -117,7 +117,7 @@ func TestHomeIsTwoTilesToTheLibraryAndImport(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}
-	mustContain(t, rec, `href="/library"`, `href="/import"`, "Library", "Import")
+	mustContain(t, rec, `href="/library?sort=recent"`, `href="/import"`, "Library", "Import")
 	body := rec.Body.String()
 	if strings.Contains(body, `role="search"`) || strings.Contains(body, "Recently added") {
 		t.Error("a search or Recently added on Home")

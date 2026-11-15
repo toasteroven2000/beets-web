@@ -6,7 +6,7 @@ import "strconv"
 templ homeView() {
 	@layout("Home", "Home") {
 		<div class="home-tiles row row-cols-1 row-cols-md-2 g-4 mx-auto">
-			@homeTile("/library", "collection", "Library", "Browse and search Albums and Items, and edit them.")
+			@homeTile("/library?sort=recent", "collection", "Library", "Browse and search Albums and Items, and edit them.")
 			@homeTile("/import", "box-arrow-in-down", "Import", "Bring in music from the Import Paths.")
 		</div>
 	}
