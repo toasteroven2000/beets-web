@@ -146,55 +146,6 @@ func TestHomeWithoutAlbumsOmitsRecent(t *testing.T) {
 	}
 }
 
-func TestArtistsWithoutEndpointSaysSo(t *testing.T) {
-	_, h := newTest(t)
-	rec := get(t, h, "/artists")
-	if rec.Code != 200 {
-		t.Fatalf("status %d", rec.Code)
-	}
-	mustContain(t, rec, "has no <code>GET /artists</code>")
-}
-
-func TestArtistsList(t *testing.T) {
-	f, h := newTest(t)
-	f.routes["GET /artists"] = func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"total": 2, "results": []any{
-			map[string]any{"name": "AC/DC", "album_count": 2, "item_count": 20},
-			map[string]any{"name": "Beyoncé", "album_count": 0, "item_count": 1},
-		}})
-	}
-	rec := get(t, h, "/artists?q=a")
-	mustContain(t, rec, "2 matching", `href="/artists/AC%2FDC"`, "2 Albums · 20 Items", "1 Item<")
-	if r, _ := f.last(t, "GET", "/artists"); r.URL.Query().Get("query") != "a" {
-		t.Errorf("query not passed: %s", r.URL.RawQuery)
-	}
-}
-
-func TestArtistPageQueriesByWholeName(t *testing.T) {
-	f, h := newTest(t)
-	f.routes["GET /config"] = func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"beets_api": map[string]any{"artist_separators": []string{"&"}}})
-	}
-	f.routes["GET /list"] = func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"total": 1, "limit": 100, "offset": 0, "results": []any{
-			map[string]any{"id": 4, "album": "Back in Black", "albumartist": "AC/DC & Friends", "year": 1980},
-		}})
-	}
-	rec := get(t, h, "/artists/AC%2FDC")
-	if rec.Code != 200 {
-		t.Fatalf("status %d: %s", rec.Code, rec.Body)
-	}
-	mustContain(t, rec, "Back in Black", `href="/library?artist=Friends"`, "Modify all 1 Album")
-	r, _ := f.last(t, "GET", "/list")
-	if got := r.URL.Query().Get("scope"); got != "album" {
-		t.Errorf("scope %q", got)
-	}
-	want := `'albumartist::^(?:.*(?:&))?\s*AC/DC\s*(?:(?:&).*)?$' albumartist+ year+ album+`
-	if got := r.URL.Query().Get("query"); got != want {
-		t.Errorf("query %s", got)
-	}
-}
-
 func TestListCombinesFiltersAndLoadsMore(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /list"] = func(w http.ResponseWriter, r *http.Request) {

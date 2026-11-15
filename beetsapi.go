@@ -72,17 +72,6 @@ type listResult struct {
 	Results []record `json:"results"`
 }
 
-type artistSummary struct {
-	Name       string `json:"name"`
-	AlbumCount int    `json:"album_count"`
-	ItemCount  int    `json:"item_count"`
-}
-
-type artistsResult struct {
-	Total   int             `json:"total"`
-	Results []artistSummary `json:"results"`
-}
-
 // modRequest is a Modify as beets-api takes it. Scope is "item" or "album".
 type modRequest struct {
 	Scope  string            `json:"scope"`
@@ -320,16 +309,6 @@ func (c *beetsAPI) Get(ctx context.Context, s scope, id int) (record, error) {
 func (c *beetsAPI) Config(ctx context.Context) (map[string]any, error) {
 	var out map[string]any
 	err := c.do(ctx, http.MethodGet, "/config", nil, nil, &out)
-	return out, err
-}
-
-func (c *beetsAPI) Artists(ctx context.Context, query string) (artistsResult, error) {
-	var out artistsResult
-	v := url.Values{}
-	if query != "" {
-		v.Set("query", query)
-	}
-	err := c.do(ctx, http.MethodGet, "/artists", v, nil, &out)
 	return out, err
 }
 

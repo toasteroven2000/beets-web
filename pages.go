@@ -71,21 +71,6 @@ func (t tableData) ModifyAllURL() string {
 	return "/modify?" + url.Values{"scope": {string(t.Scope)}, "q": {t.Query}}.Encode()
 }
 
-type artistsPage struct {
-	Query       string
-	Artists     []artistSummary
-	Total       int
-	Unavailable bool // beets-api has no GET /artists yet
-}
-
-type artistPage struct {
-	Name    string
-	Tab     scope
-	Queries map[scope]string
-	Counts  map[scope]int
-	Table   tableData
-}
-
 type recordPage struct {
 	Scope      scope
 	Tab        string // an Album page's tab: "items", "fields" or "art"
@@ -205,14 +190,6 @@ func count(n int, k scope) string {
 		return "1 " + k.One()
 	}
 	return strconv.Itoa(n) + " " + k.Title()
-}
-
-func artistURL(name string, tab scope) string {
-	u := "/artists/" + url.PathEscape(name)
-	if tab != "" {
-		u += "?tab=" + string(tab)
-	}
-	return u
 }
 
 // artistLibraryURL is the Library filtered to one Artist.

@@ -45,7 +45,6 @@ The `*_templ.go` files are not committed. Run `go generate ./...` before `go bui
 
 These features need endpoints that beets-api doesn't have yet. Until they exist, their pages say so instead of failing.
 
-- Artist list: `GET /artists` (beets-api `.scratch/artists/`)
 - Modifications list: `GET /modifications` (beets-api `.scratch/modifications-history/`)
 - Audit: `GET /audit`, and `GET /audit/{id}` for one entry
 - Album art: `GET /albums/{id}/art` (beets-api `.scratch/album-art/`)

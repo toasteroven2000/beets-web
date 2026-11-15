@@ -33,8 +33,6 @@ func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /public/static/", staticHandler())
 	mux.HandleFunc("GET /{$}", s.handleHome)
-	mux.HandleFunc("GET /artists", s.handleArtists)
-	mux.HandleFunc("GET /artists/{name}", s.handleArtist)
 	mux.HandleFunc("GET /library", s.handleLibrary)
 	mux.HandleFunc("GET /albums", redirectToLibrary("albums"))
 	mux.HandleFunc("GET /items", redirectToLibrary("items"))
@@ -100,7 +98,7 @@ func errorMessage(err error) string {
 }
 
 // separators are the Artist separators from beets-api's config, so the UI
-// splits and queries Artists the same way GET /artists counts them.
+// splits and queries Artists.
 func (s *server) separators(ctx context.Context) []string {
 	cfg, err := s.api.Config(ctx)
 	if err != nil {
@@ -147,74 +145,6 @@ func nextURL(r *http.Request, res listResult) string {
 var listFields = map[scope][]string{
 	albums: {"id", "albumartist", "album", "year", "albumtype", "added"},
 	items:  {"id", "artist", "title", "album", "album_id", "track", "tracktotal", "disc", "disctitle", "length", "format", "bitrate", "trackdisambig", "year", "added"},
-}
-
-func (s *server) table(r *http.Request, k scope, query string) (tableData, error) {
-	ctx := r.Context()
-	res, err := s.api.List(ctx, k, sortQuery(query, k, "artist"), pageSize, offsetParam(r), listFields[k])
-	if err != nil {
-		return tableData{}, err
-	}
-	return tableData{
-		Scope:      k,
-		Query:      query,
-		Rows:       res.Results,
-		Total:      res.Total,
-		Next:       nextURL(r, res),
-		Separators: s.separators(ctx),
-	}, nil
-}
-
-func (s *server) handleArtists(w http.ResponseWriter, r *http.Request) {
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	res, err := s.api.Artists(r.Context(), q)
-	p := artistsPage{Query: q, Artists: res.Results, Total: res.Total}
-	if isStatus(err, http.StatusNotFound) {
-		p.Unavailable = true
-	} else if err != nil {
-		fail(w, err)
-		return
-	}
-	render(w, http.StatusOK, artistsView(p))
-}
-
-func (s *server) handleArtist(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	name := r.PathValue("name")
-	k, ok := parseScope(r.URL.Query().Get("tab"))
-	seps := s.separators(ctx)
-	p := artistPage{Name: name, Queries: map[scope]string{}, Counts: map[scope]int{}}
-	for _, each := range []scope{albums, items} {
-		p.Queries[each] = artistQuery(each, name, seps)
-		res, err := s.api.List(ctx, each, p.Queries[each], 1, 0, []string{"id"})
-		if err != nil {
-			fail(w, err)
-			return
-		}
-		p.Counts[each] = res.Total
-	}
-	if !ok {
-		k = albums
-		if p.Counts[albums] == 0 && p.Counts[items] > 0 {
-			k = items
-		}
-	}
-	p.Tab = k
-	t, err := s.table(r, k, p.Queries[k])
-	if err != nil {
-		fail(w, err)
-		return
-	}
-	if isMore(r) {
-		render(w, http.StatusOK, tableRows(t))
-		return
-	}
-	if p.Counts[albums]+p.Counts[items] == 0 {
-		render(w, http.StatusNotFound, errorPage(http.StatusNotFound, "No Album or Item credits "+name+"."))
-		return
-	}
-	p.Table = t
-	render(w, http.StatusOK, artistView(p))
 }
 
 func filtersFrom(r *http.Request) filters {
