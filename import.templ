@@ -672,13 +672,14 @@ templ importOutcomes(op importOp) {
 							<span class="text-body-secondary">Skipped</span>
 						} else if len(o.Items) == 0 {
 							<span class="text-body-secondary">Nothing imported</span>
-						} else if a := outcomeAlbum(o); a > 0 {
-							<a href={ templ.URL(recordURL(albums, a)) }>Album { strconv.Itoa(a) }</a>
-							· { strconv.Itoa(len(o.Items)) } Items
 						} else {
+							if a := outcomeAlbum(o); a > 0 {
+								<a class="fw-medium" href={ templ.URL(recordURL(albums, a)) }>Album { strconv.Itoa(a) }</a>
+								<span class="text-body-secondary">·</span>
+							}
 							for i, it := range o.Items {
 								if i > 0 {
-									·
+									<span class="text-body-secondary">·</span>
 								}
 								<a href={ templ.URL(recordURL(items, it.ID())) }>Item { strconv.Itoa(it.ID()) }</a>
 							}

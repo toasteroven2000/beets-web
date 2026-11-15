@@ -335,7 +335,8 @@ func TestFinishedImportLinksWhatItMade(t *testing.T) {
 				}}})
 	}
 	rec := get(t, h, "/imports/7")
-	mustContain(t, rec, `href="/albums/3"`, "2 Items", "Skipped", "Nothing imported", `href="/audit?operation=7"`,
+	// The Album and each of its Items, so either can be followed.
+	mustContain(t, rec, `href="/albums/3"`, "Album 3", `href="/items/11"`, `href="/items/12"`, "Item 11", "Item 12", "Skipped", "Nothing imported", `href="/audit?operation=7"`,
 		`href="/imports/7/undo"`)
 	if strings.Contains(rec.Body.String(), "Abort Import") {
 		t.Error("finished Import offers Abort")
@@ -514,5 +515,17 @@ func TestSourceURL(t *testing.T) {
 	}
 	if u := sourceURL(candidate{DataSource: "Discogs", ID: "1"}); u != "" {
 		t.Error(u)
+	}
+}
+
+func TestSingletonOutcomeLinksItemsOnly(t *testing.T) {
+	f, h := newTest(t)
+	op := finishedImport(nil)
+	op["result"].(map[string]any)["outcomes"] = []any{map[string]any{"paths": []string{"/in/a"}, "skipped": false, "items": []any{map[string]any{"id": 11, "album_id": nil}}}}
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, op) }
+	rec := get(t, h, "/imports/7")
+	mustContain(t, rec, `href="/items/11"`)
+	if strings.Contains(rec.Body.String(), `href="/albums/`) {
+		t.Error("an Album link for a singleton")
 	}
 }
