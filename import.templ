@@ -148,16 +148,18 @@ templ importHistory(p importStartPage) {
 				<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.HistoryURL(max(0, p.Offset-importsPerPage))) }><i class="bi bi-chevron-left" aria-hidden="true"></i> Newer</a>
 			}
 			if p.Offset+len(p.Imports) < p.Total {
-				<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.HistoryURL(p.Offset+importsPerPage)) }>Older <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+				<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.HistoryURL(p.Offset + importsPerPage)) }>Older <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
 			}
 			<span class="small text-body-secondary">{ plural(p.Total, "Import", "Imports") }</span>
 		</div>
 	}
 }
 
-// importView follows one Import: it polls while beets works, shows the prompt
-// when beets needs a Choice, and the outcome at the end.
-templ importView(op importOp, stale, noSources bool, mode importMode) {
+// importView follows one Import. Now shows where it is and what beets asks;
+// the Log lists every Task, done and still to come; Paths says what was asked
+// to be imported. While beets works the page refreshes itself.
+templ importView(pg importPage) {
+	{{ op := pg.Op }}
 	{{ id := string(op.ID) }}
 	@layout("Import "+id, "Import") {
 		<nav aria-label="breadcrumb">
@@ -166,8 +168,16 @@ templ importView(op importOp, stale, noSources bool, mode importMode) {
 				<li class="breadcrumb-item active" aria-current="page">Import { id }</li>
 			</ol>
 		</nav>
-		<div id="import" if op.Status == "running" { hx-get={ "/imports/" + id } hx-trigger="every 1s" hx-select="#import" hx-swap="outerHTML" }>
-			<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+		<div
+			id="import"
+			if op.Status == "running" {
+				hx-get={ pg.PollURL() }
+				hx-trigger="every 1s"
+				hx-select="#import"
+				hx-swap="outerHTML"
+			}
+		>
+			<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
 				<h1 class="h3 mb-0">Import { id }</h1>
 				<span class={ "badge", importStatusClass(op.Status) }>{ statusText(op.Status) }</span>
 				if op.Request.Singletons {
@@ -179,58 +189,227 @@ templ importView(op importOp, stale, noSources bool, mode importMode) {
 					</form>
 				}
 			</div>
-			<div class="font-monospace small text-break text-body-secondary mb-3">
+			<div class="font-monospace small text-break text-body-secondary">
 				for _, path := range op.Request.Paths {
 					<div>{ path }</div>
 				}
 			</div>
 			if op.Result.Actor != nil && *op.Result.Actor != "" {
 				<div class="small text-body-secondary mb-3">Started by { *op.Result.Actor }</div>
+			} else {
+				<div class="mb-3"></div>
 			}
-			if stale {
+			if pg.Stale {
 				<div class="alert alert-info py-2">That prompt had already moved on; this is where the Import is now.</div>
 			}
-			switch op.Status {
-				case "running":
-					<div class="d-flex align-items-center gap-2 text-body-secondary mb-3">
-						<div class="spinner-border spinner-border-sm" role="status"></div>
-						beets is working…
-					</div>
-				case "waiting_for_choice":
-					if pr := op.Result.Prompt; pr != nil {
-						@importPromptView(id, *pr, noSources, mode)
-					}
-				case "failed":
-					<div class="alert alert-danger">The Import failed: { orDash(op.Result.Error) }</div>
-				case "aborted":
-					<div class="alert alert-secondary">The Import was aborted. Import Tasks finished before that stay in the Library.</div>
-			}
-			if len(op.Result.Outcomes) > 0 {
-				@importOutcomes(op)
-			}
-			if len(op.Result.Choices) > 0 {
-				<h2 class="h6 mt-4">Choices</h2>
-				<ol class="small">
-					for _, c := range op.Result.Choices {
-						<li>
-							{ choiceText(c) }
-							if c.Actor != nil && *c.Actor != "" {
-								<span class="text-body-secondary">by { *c.Actor }</span>
-							}
-							<span class="font-monospace text-body-secondary text-break">
-								for i, path := range c.Paths {
-									if i > 0 {
-										,
-									}
-									{ baseName(path) }
-								}
-							</span>
-						</li>
-					}
-				</ol>
+			<ul class="nav nav-tabs mb-3">
+				@importTabLink(pg, "now", "Now")
+				<li class="nav-item">
+					<a class={ "nav-link", templ.KV("active", pg.Tab == "log") } href={ templ.URL(pg.TabURL("log")) }>Log <span class="badge text-bg-secondary">{ strconv.Itoa(len(pg.Done())) }</span></a>
+				</li>
+				@importTabLink(pg, "paths", "Paths")
+			</ul>
+			switch pg.Tab {
+				case "log":
+					@importLog(pg)
+				case "paths":
+					@importPaths(pg)
+				default:
+					@importNow(pg)
 			}
 		</div>
 	}
+}
+
+templ importTabLink(pg importPage, tab, label string) {
+	<li class="nav-item">
+		<a class={ "nav-link", templ.KV("active", pg.Tab == tab) } href={ templ.URL(pg.TabURL(tab)) }>{ label }</a>
+	</li>
+}
+
+// importProgress says which Task the Import is on, out of how many beets
+// expects, and how the Tasks so far went.
+templ importProgress(pg importPage) {
+	<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+		<strong>{ pg.Step() }</strong>
+		if pg.Total() > 0 {
+			<div class="progress import-progress" role="progressbar" aria-label="Progress" aria-valuenow={ strconv.Itoa(pg.Percent()) } aria-valuemin="0" aria-valuemax="100">
+				<div class="progress-bar bg-success" style={ pg.Segment("applied") }></div>
+				<div class="progress-bar bg-primary" style={ pg.Segment("asis") }></div>
+				<div class="progress-bar bg-secondary" style={ pg.Segment("skipped") }></div>
+				<div class="progress-bar bg-info" style={ pg.Segment("other") }></div>
+				<div class="progress-bar bg-warning" style={ pg.Segment("now") }></div>
+			</div>
+			<span class="small text-body-secondary">{ strconv.Itoa(pg.Percent()) }%</span>
+		} else if importActive(pg.Op.Status) {
+			<div class="progress import-progress" role="progressbar" aria-label="Progress, total unknown">
+				<div class="progress-bar progress-bar-striped bg-secondary" style="width: 100%"></div>
+			</div>
+		}
+		<span class="small ms-md-auto">
+			<i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i> { strconv.Itoa(pg.Count("applied")) } applied
+			<i class="bi bi-box text-primary ms-2" aria-hidden="true"></i> { strconv.Itoa(pg.Count("asis")) } as-is
+			<i class="bi bi-dash-circle text-secondary ms-2" aria-hidden="true"></i> { strconv.Itoa(pg.Count("skipped")) } skipped
+			if n := pg.OtherDone(); n > 0 {
+				<span class="ms-2">· { strconv.Itoa(n) } other</span>
+			}
+			if n := pg.Remaining(); n > 0 {
+				<span class="text-body-secondary ms-2">· { strconv.Itoa(n) } to go</span>
+			}
+		</span>
+	</div>
+	if next := pg.UpNext(); next != "" {
+		<div class="small mb-2"><span class="text-body-secondary">Up next:</span> <span class="font-monospace">{ next }</span></div>
+	}
+}
+
+// importNow is where the Import is, and what beets is asking.
+templ importNow(pg importPage) {
+	{{ op := pg.Op }}
+	@importProgress(pg)
+	switch op.Status {
+		case "running":
+			<div class="d-flex align-items-center gap-2 text-body-secondary mb-3">
+				<div class="spinner-border spinner-border-sm" role="status"></div>
+				beets is working…
+			</div>
+		case "waiting_for_choice":
+			if pr := op.Result.Prompt; pr != nil {
+				@importPromptView(string(op.ID), *pr, pg.NoSources, pg.Mode)
+			}
+		case "failed":
+			<div class="alert alert-danger">The Import failed: { orDash(op.Result.Error) }</div>
+		case "aborted":
+			<div class="alert alert-secondary">The Import was aborted. Import Tasks finished before that stay in the Library.</div>
+	}
+	if len(op.Result.Outcomes) > 0 {
+		@importOutcomes(op)
+	}
+}
+
+// importLog lists the Import's Tasks: the one beets is on, those done, and
+// those still to come, each with how it went.
+templ importLog(pg importPage) {
+	{{ op := pg.Op }}
+	{{ done := len(pg.Done()) }}
+	<div class="d-flex flex-wrap gap-2 mb-2">
+		@logChip(pg, "all", "All", done)
+		@logChip(pg, "applied", "Applied", pg.Count("applied"))
+		@logChip(pg, "asis", "As-is", pg.Count("asis"))
+		@logChip(pg, "skipped", "Skipped", pg.Count("skipped"))
+		if importActive(op.Status) && op.Result.ExpectedTasks != nil {
+			@logChip(pg, "remaining", "Remaining", pg.Remaining())
+		}
+	</div>
+	<div class="table-responsive">
+		<table class="table table-sm align-middle">
+			<thead>
+				<tr><th class="text-end log-number">#</th><th>Folder</th><th>Result</th><th>By</th></tr>
+			</thead>
+			<tbody>
+				if pg.Show == "all" && op.Status == "waiting_for_choice" && op.Result.Prompt != nil {
+					<tr class="table-warning">
+						<td class="text-end">{ strconv.Itoa(done + 1) }</td>
+						<td><i class="bi bi-arrow-right-circle-fill text-warning" aria-hidden="true"></i> <span class="text-break">{ pg.folderOf(op.Result.Prompt.Paths) }</span></td>
+						<td class="small">Waiting for you</td>
+						<td></td>
+					</tr>
+				}
+				if pg.Show != "remaining" {
+					for _, r := range pg.Newest(pg.Show) {
+						<tr>
+							<td class="text-end text-body-secondary">{ strconv.Itoa(r.Number) }</td>
+							<td>@logIcon(r.Kind) <span class="text-break">{ r.Folder }</span></td>
+							<td class="small">{ r.Result }</td>
+							<td class="small text-body-secondary">{ r.By }</td>
+						</tr>
+					}
+				}
+				if pg.Show == "all" || pg.Show == "remaining" {
+					for i, t := range pg.Pending {
+						<tr class="text-body-secondary">
+							<td class="text-end">{ strconv.Itoa(pg.firstPending(done) + i) }</td>
+							<td><i class="bi bi-circle" aria-hidden="true"></i> <span class="text-break">{ pg.folderOf(t.Paths) }</span></td>
+							<td class="small">Waiting</td>
+							<td></td>
+						</tr>
+					}
+				}
+				if pg.Show == "all" && pg.PendingTotal > len(pg.Pending) {
+					<tr class="text-body-secondary">
+						<td></td>
+						<td colspan="3" class="small"><a href={ templ.URL(pg.LogURL("remaining", 0)) }>… { strconv.Itoa(pg.PendingTotal - len(pg.Pending)) } more</a></td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+	if pg.Show == "remaining" {
+		<div class="d-flex gap-2 align-items-center">
+			if pg.Offset > 0 {
+				<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(pg.LogURL("remaining", max(0, pg.Offset-remainingPerPage))) }><i class="bi bi-chevron-left" aria-hidden="true"></i> Earlier</a>
+			}
+			if pg.Offset+len(pg.Pending) < pg.PendingTotal {
+				<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(pg.LogURL("remaining", pg.Offset+remainingPerPage)) }>Later <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+			}
+		</div>
+		<p class="small text-body-secondary mt-2"><i class="bi bi-info-circle" aria-hidden="true"></i> In the order beets will ask. Choosing "Import as tracks" or "Group albums" for a folder can change what comes after it.</p>
+	}
+}
+
+templ logChip(pg importPage, show, label string, n int) {
+	<a class={ "chip", templ.KV("on", pg.Show == show) } href={ templ.URL(pg.LogURL(show, 0)) }>{ label } { strconv.Itoa(n) }</a>
+}
+
+templ logIcon(kind string) {
+	switch kind {
+		case "applied":
+			<i class="bi bi-check-circle-fill text-success" aria-label="applied"></i>
+		case "asis":
+			<i class="bi bi-box text-primary" aria-label="as-is"></i>
+		case "skipped":
+			<i class="bi bi-dash-circle text-secondary" aria-label="skipped"></i>
+		default:
+			<i class="bi bi-check-circle text-info" aria-label="done"></i>
+	}
+}
+
+// importPaths is what the Import was asked to bring in.
+templ importPaths(pg importPage) {
+	<table class="table table-sm table-borderless w-auto">
+		<tbody>
+			<tr>
+				<th class="fw-normal text-body-secondary pe-4">Import Paths</th>
+				<td class="font-monospace small text-break">
+					for _, path := range pg.Op.Request.Paths {
+						<div>{ path }</div>
+					}
+				</td>
+			</tr>
+			<tr>
+				<th class="fw-normal text-body-secondary pe-4">Import as</th>
+				<td>
+					if pg.Op.Request.Singletons {
+						Items (singletons)
+					} else {
+						Albums
+					}
+				</td>
+			</tr>
+			if pg.Op.Result.Actor != nil && *pg.Op.Result.Actor != "" {
+				<tr>
+					<th class="fw-normal text-body-secondary pe-4">Started by</th>
+					<td>{ *pg.Op.Result.Actor }</td>
+				</tr>
+			}
+			if pg.Total() > 0 {
+				<tr>
+					<th class="fw-normal text-body-secondary pe-4">Tasks expected</th>
+					<td>{ strconv.Itoa(pg.Total()) } <span class="small text-body-secondary">(an estimate)</span></td>
+				</tr>
+			}
+		</tbody>
+	</table>
 }
 
 templ importPromptView(id string, p importPrompt, noSources bool, mode importMode) {

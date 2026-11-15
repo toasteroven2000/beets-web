@@ -278,7 +278,7 @@ func TestDuplicatePromptLinksExistingAlbums(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, duplicatePrompt()) }
 	mustContain(t, get(t, h, "/imports/7"), "Already in the Library", `href="/albums/3"`, "The Beatles – Abbey Road",
-		">Skip<", ">Keep both<", ">Merge<", ">Remove old<", "deleting their files")
+		">Skip<", ">Keep both<", ">Merge<", ">Remove old<", "moving their files to the Trash")
 }
 
 func TestRemoveOldAsksFirst(t *testing.T) {
@@ -335,7 +335,7 @@ func TestFinishedImportLinksWhatItMade(t *testing.T) {
 				}}})
 	}
 	rec := get(t, h, "/imports/7")
-	mustContain(t, rec, `href="/albums/3"`, "2 Items", "Skipped", "Nothing imported", "Applied Candidate 1", `href="/audit?operation=7"`,
+	mustContain(t, rec, `href="/albums/3"`, "2 Items", "Skipped", "Nothing imported", `href="/audit?operation=7"`,
 		`href="/imports/7/undo"`)
 	if strings.Contains(rec.Body.String(), "Abort Import") {
 		t.Error("finished Import offers Abort")

@@ -170,5 +170,11 @@ func TestImportShowsWhoStartedItAndGaveEachChoice(t *testing.T) {
 		map[string]any{"paths": []string{"/in/a"}, "kind": "album", "action": "apply", "candidate": 0, "actor": "carol"},
 	}})
 	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, op) }
-	mustContain(t, get(t, h, "/imports/7"), "Started by alice", "by bob", "by carol")
+	// One Task, found by a search (bob) and then applied (carol): the Log has one row, by the last.
+	mustContain(t, get(t, h, "/imports/7"), "Started by alice")
+	rec := get(t, h, "/imports/7?tab=log")
+	mustContain(t, rec, "Applied", "carol")
+	if strings.Contains(rec.Body.String(), "bob") || strings.Count(rec.Body.String(), "<td class=\"small\">Applied</td>") != 1 {
+		t.Error("a searched Task is listed more than once")
+	}
 }

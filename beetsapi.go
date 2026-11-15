@@ -512,7 +512,13 @@ type importResult struct {
 	Outcomes []importOutcome `json:"outcomes"`
 	Error    string          `json:"error"`
 	Actor    *string         `json:"actor"` // who started the Import
-	Undone   *struct {
+	// ExpectedTasks is how many Import Tasks beets will ask about, counted when
+	// the Import starts: nil if it couldn't be, and only an estimate, as choosing
+	// "Import as tracks" or "Group albums" adds some. TasksDone is how many it
+	// has finished, skipped ones too.
+	ExpectedTasks *int `json:"expected_tasks"`
+	TasksDone     int  `json:"tasks_done"`
+	Undone        *struct {
 		At string `json:"at"`
 	} `json:"undone"` // set once the Import has been undone
 }
@@ -828,5 +834,29 @@ func (c *beetsAPI) Purges(ctx context.Context, limit, offset int) (purgeList, er
 	v := url.Values{"limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}
 	var out purgeList
 	err := c.do(ctx, http.MethodGet, "/purges", v, nil, &out)
+	return out, err
+}
+
+// importTask is one Import Task beets expects: the folder (or file) it is
+// about, and where it is: done, current or pending.
+type importTask struct {
+	Paths []string `json:"paths"`
+	State string   `json:"state"`
+}
+
+type importTaskList struct {
+	Total   int          `json:"total"`
+	Results []importTask `json:"results"`
+}
+
+// ImportTasks lists the Tasks an active Import expects, in the order beets will
+// ask. beets-api has none for an Import that has ended.
+func (c *beetsAPI) ImportTasks(ctx context.Context, id string, states []string, limit, offset int) (importTaskList, error) {
+	v := url.Values{"limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}
+	for _, s := range states {
+		v.Add("state", s)
+	}
+	var out importTaskList
+	err := c.do(ctx, http.MethodGet, "/imports/"+url.PathEscape(id)+"/tasks", v, nil, &out)
 	return out, err
 }

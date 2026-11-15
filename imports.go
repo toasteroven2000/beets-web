@@ -192,7 +192,7 @@ var importChoiceLabels = map[string][2]string{
 	"albums": {"Group albums", "Split these files into Albums by their tags, and match each."},
 	"skip":   {"Skip", "Leave these files out of the Library."},
 	"keep":   {"Keep both", "Import the new files next to the ones already in the Library."},
-	"remove": {"Remove old", "Import the new files and remove the existing ones from the Library, deleting their files."},
+	"remove": {"Remove old", "Import the new files and remove the existing ones from the Library, moving their files to the Trash."},
 	"merge":  {"Merge", "Combine the new and existing files into one Album, then match it again."},
 }
 
@@ -625,7 +625,8 @@ func (s *server) handleCreateImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
-	op, err := s.api.Import(r.Context(), r.PathValue("id"))
+	id := r.PathValue("id")
+	op, err := s.api.Import(r.Context(), id)
 	if err != nil {
 		fail(w, err)
 		return
@@ -634,8 +635,30 @@ func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
 	if op.Result.Prompt != nil && op.Result.Prompt.Kind != "duplicate" {
 		cfg, _ = s.api.Config(r.Context())
 	}
-	noSources := op.Result.Prompt != nil && len(op.Result.Prompt.Candidates) == 0 && noMetadataSource(cfg)
-	render(w, http.StatusOK, importView(op, r.URL.Query().Get("stale") != "", noSources, importModeFrom(cfg)))
+	q := r.URL.Query()
+	pg := importPage{
+		Op: op, Stale: q.Get("stale") != "", Mode: importModeFrom(cfg), Tab: importTab(q.Get("tab")), Show: importShow(q.Get("show")), Offset: offsetParam(r),
+		NoSources: op.Result.Prompt != nil && len(op.Result.Prompt.Candidates) == 0 && noMetadataSource(cfg),
+	}
+	// What is still to come, for an Import beets-api has planned. Not having it
+	// is fine: the page just doesn't list it.
+	if importActive(op.Status) && op.Result.ExpectedTasks != nil {
+		limit, offset := 0, 0
+		switch {
+		case pg.Tab == "now":
+			limit = 1
+		case pg.Tab == "log" && pg.Show == "all":
+			limit = logPendingRows
+		case pg.Tab == "log" && pg.Show == "remaining":
+			limit, offset = remainingPerPage, pg.Offset
+		}
+		if limit > 0 {
+			if list, err := s.api.ImportTasks(r.Context(), id, []string{"pending"}, limit, offset); err == nil {
+				pg.Pending, pg.PendingTotal = list.Results, list.Total
+			}
+		}
+	}
+	render(w, http.StatusOK, importView(pg))
 }
 
 func (s *server) handleImportChoice(w http.ResponseWriter, r *http.Request) {
