@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -190,6 +191,16 @@ func count(n int, k scope) string {
 		return "1 " + k.One()
 	}
 	return strconv.Itoa(n) + " " + k.Title()
+}
+
+// audioExtensions are the files beets-api will serve for playing.
+var audioExtensions = map[string]bool{".mp3": true, ".flac": true, ".ogg": true, ".oga": true, ".opus": true, ".m4a": true, ".mp4": true, ".aac": true, ".wav": true, ".aif": true, ".aiff": true}
+
+func isAudioFile(name string) bool { return audioExtensions[strings.ToLower(path.Ext(name))] }
+
+// importAudioURL plays a file waiting under an Import Path.
+func importAudioURL(p string) string {
+	return "/import-paths/audio?" + url.Values{"path": {p}}.Encode()
 }
 
 // artistLibraryURL is the Library filtered to one Artist.

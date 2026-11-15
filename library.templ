@@ -313,7 +313,10 @@ templ itemRows(t tableData, pick bool) {
 			if pick {
 				<td class="select-col"><input class="form-check-input" type="checkbox" name="id" value={ strconv.Itoa(r.ID()) } aria-label="Select"/></td>
 			}
-			<td><a class="title-link" href={ templ.URL(recordURL(items, r.ID())) }>{ orDash(r.Str("title")) }</a></td>
+			<td>
+				@playItem(r.ID(), r.Str("artist"), r.Str("title"))
+				<a class="title-link" href={ templ.URL(recordURL(items, r.ID())) }>{ orDash(r.Str("title")) }</a>
+			</td>
 			<td class="quiet">
 				@artistLinks(r.Str("artist"), t.Separators)
 			</td>

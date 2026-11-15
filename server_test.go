@@ -111,38 +111,19 @@ func mustContain(t *testing.T, rec *httptest.ResponseRecorder, wants ...string) 
 	}
 }
 
-func TestHomeIsOnlyASearchBar(t *testing.T) {
-	_, h := newTest(t)
+func TestHomeIsTwoTilesToTheLibraryAndImport(t *testing.T) {
+	f, h := newTest(t)
 	rec := get(t, h, "/")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}
-	mustContain(t, rec, `action="/library"`, `name="q"`)
-	if n := strings.Count(rec.Body.String(), `name="q"`); n != 1 {
-		t.Errorf("%d search inputs, want 1", n)
+	mustContain(t, rec, `href="/library"`, `href="/import"`, "Library", "Import")
+	body := rec.Body.String()
+	if strings.Contains(body, `role="search"`) || strings.Contains(body, "Recently added") {
+		t.Error("a search or Recently added on Home")
 	}
-}
-
-func TestHomeListsRecentlyAddedAlbums(t *testing.T) {
-	f, h := newTest(t)
-	f.routes["GET /list"] = func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"total": 1, "results": []any{
-			map[string]any{"id": 7, "album": "Let It Be", "albumartist": "The Beatles"},
-		}})
-	}
-	mustContain(t, get(t, h, "/"), "Recently added", `href="/albums/7"`, `src="/albums/7/art"`, "Let It Be", "The Beatles")
-	req, _ := f.last(t, "GET", "/list")
-	q := req.URL.Query()
-	if q.Get("scope") != "album" || !strings.Contains(q.Get("query"), "added-") || q.Get("limit") != "12" {
-		t.Errorf("list request %v", q)
-	}
-}
-
-func TestHomeWithoutAlbumsOmitsRecent(t *testing.T) {
-	_, h := newTest(t)
-	rec := get(t, h, "/")
-	if strings.Contains(rec.Body.String(), "Recently added") {
-		t.Error("empty Library shows a Recently added section")
+	if len(f.requests) != 0 {
+		t.Errorf("Home asked beets-api for %d things", len(f.requests))
 	}
 }
 

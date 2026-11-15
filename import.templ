@@ -83,7 +83,14 @@ templ importStartView(p importStartPage) {
 										<td class="small text-body-secondary text-nowrap">{ shortTime(e.MTime) }</td>
 										<td class="text-end"><button class="btn btn-sm btn-outline-primary" name="path" value={ e.Path }><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Import</button></td>
 									} else {
-										<td class="text-body-secondary"><i class="bi bi-file-earmark" aria-hidden="true"></i> { e.Name }</td>
+										<td class="text-body-secondary">
+											if isAudioFile(e.Name) {
+												@playButton(importAudioURL(e.Path), e.Name)
+											} else {
+												<i class="bi bi-file-earmark" aria-hidden="true"></i>
+											}
+											{ e.Name }
+										</td>
 										<td class="small text-end text-nowrap">{ sizeText(e.Size) }</td>
 										<td class="small text-body-secondary text-nowrap">{ shortTime(e.MTime) }</td>
 										<td></td>

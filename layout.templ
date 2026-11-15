@@ -1,6 +1,9 @@
 package main
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
 templ layout(title string, active string) {
 	<!DOCTYPE html>
@@ -53,6 +56,14 @@ templ layout(title string, active string) {
 			<main class="container-xl py-3">
 				{ children... }
 			</main>
+			<div id="player" class="player border-top" hidden>
+				<div class="container-xl d-flex align-items-center gap-3 py-2">
+					<span class="player-title text-truncate small fw-semibold"></span>
+					<audio class="flex-grow-1" controls preload="none"></audio>
+					<button type="button" class="btn-close" aria-label="Close the player" data-player-close></button>
+				</div>
+			</div>
+			<script src={ assetURL("player.js") }></script>
 			<script src={ assetURL("bootstrap.bundle.min.js") }></script>
 			<script src={ assetURL("htmx.min.js") }></script>
 		</body>
@@ -139,4 +150,14 @@ templ artistLinks(credit string, separators []string) {
 // icon is a decorative Bootstrap Icon; the text beside it carries the meaning.
 templ icon(name string) {
 	<i class={ "bi", "bi-" + name } aria-hidden="true"></i>
+}
+
+// playButton plays an audio file in the page's player; player.js does the rest.
+templ playButton(src, title string) {
+	<button type="button" class="btn btn-sm btn-link play-btn p-0 me-1" data-play={ src } data-title={ title } aria-label={ "Play " + title } title="Play"><i class="bi bi-play-fill" aria-hidden="true"></i></button>
+}
+
+// playItem plays an Item's file.
+templ playItem(id int, artist, title string) {
+	@playButton("/items/"+strconv.Itoa(id)+"/audio", strings.TrimSpace(artist+" – "+title))
 }

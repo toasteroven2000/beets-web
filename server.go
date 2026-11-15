@@ -40,6 +40,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /albums/{id}", s.handleRecord(albums))
 	mux.HandleFunc("GET /items/{id}", s.handleRecord(items))
 	mux.HandleFunc("GET /albums/{id}/art", s.handleArt)
+	mux.HandleFunc("GET /items/{id}/audio", s.handleItemAudio)
+	mux.HandleFunc("GET /import-paths/audio", s.handleImportAudio)
 	mux.HandleFunc("GET /albums/{id}/art/search", s.handleArtSearch)
 	mux.HandleFunc("POST /albums/{id}/art", s.handleSetArt)
 	mux.HandleFunc("GET /albums/{id}/art/remove", s.handleArtRemoveForm)
@@ -161,17 +163,8 @@ func filtersFrom(r *http.Request) filters {
 	}
 }
 
-// recentAlbumCount is how many recently added Albums the home page shows.
-const recentAlbumCount = 12
-
-// handleHome shows the search bar and the newest Albums. The page works
-// without them: if beets-api can't list Albums, only the search bar shows.
 func (s *server) handleHome(w http.ResponseWriter, r *http.Request) {
-	res, err := s.api.List(r.Context(), albums, sortQuery("", albums, "recent"), recentAlbumCount, 0, listFields[albums])
-	if err != nil {
-		log.Printf("home: recent albums: %v", err)
-	}
-	render(w, http.StatusOK, homeView(res.Results))
+	render(w, http.StatusOK, homeView())
 }
 
 func idParam(w http.ResponseWriter, r *http.Request) (int, bool) {
@@ -270,6 +263,36 @@ func (s *server) handleArt(w http.ResponseWriter, r *http.Request) {
 	// Set art keeps the same URL, so the browser must check it each time.
 	w.Header().Set("Cache-Control", "no-cache")
 	io.Copy(w, resp.Body)
+}
+
+// relayAudio sends beets-api's answer on, partial content and all.
+func relayAudio(w http.ResponseWriter, resp *http.Response, err error) {
+	if err != nil {
+		http.Error(w, "beets-api is unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	for _, h := range []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"} {
+		if v := resp.Header.Get(h); v != "" {
+			w.Header().Set(h, v)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func (s *server) handleItemAudio(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r)
+	if !ok {
+		return
+	}
+	resp, err := s.api.Audio(r.Context(), "/items/"+strconv.Itoa(id)+"/audio", nil, r.Header.Get("Range"))
+	relayAudio(w, resp, err)
+}
+
+func (s *server) handleImportAudio(w http.ResponseWriter, r *http.Request) {
+	resp, err := s.api.Audio(r.Context(), "/import-paths/audio", url.Values{"path": {r.URL.Query().Get("path")}}, r.Header.Get("Range"))
+	relayAudio(w, resp, err)
 }
 
 // handleModifyForm is the bulk Modify form, for ticked rows (`id`) or for

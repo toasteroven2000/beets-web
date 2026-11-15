@@ -147,6 +147,7 @@ templ discBlock(t tableData, d discTable, several bool) {
 								<td class="select-col"><input class="form-check-input" type="checkbox" name="id" value={ strconv.Itoa(s.Row.ID()) } aria-label="Select"/></td>
 								<td class="text-end text-body-secondary track-col">{ trackOnDisc(s.Row) }</td>
 								<td>
+									@playItem(s.Row.ID(), s.Row.Str("artist"), s.Row.Str("title"))
 									<a href={ templ.URL(recordURL(items, s.Row.ID())) }>{ orDash(s.Row.Str("title")) }</a>
 									if isExplicit(s.Row) {
 										<span class="badge text-bg-secondary ms-1" title="Explicit">E</span>

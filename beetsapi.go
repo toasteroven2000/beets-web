@@ -359,6 +359,25 @@ func (c *beetsAPI) AlbumArt(ctx context.Context, id int) (*http.Response, error)
 	return resp, nil
 }
 
+// Audio fetches a file for playing: an Item's (path "/items/7/audio") or one
+// under an Import Path ("/import-paths/audio" with the path). The Range header
+// is passed on so a browser can seek, and the response is returned as it came,
+// whatever its status, for the caller to relay.
+func (c *beetsAPI) Audio(ctx context.Context, path string, query url.Values, rangeHeader string) (*http.Response, error) {
+	u := c.base + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	if rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+	}
+	return c.http.Do(req)
+}
+
 // SetAlbumArt sends an image (JPEG or PNG bytes) as an Album's art.
 func (c *beetsAPI) SetAlbumArt(ctx context.Context, id int, data []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.base+"/albums/"+strconv.Itoa(id)+"/art", bytes.NewReader(data))
