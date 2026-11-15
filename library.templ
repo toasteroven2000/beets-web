@@ -3,14 +3,11 @@ package main
 import "strconv"
 
 // libraryView is the Library: Albums or Items, searched and filtered, with
-// an All tab showing both while there is a search.
+// tabs for each, counted for the current search.
 templ libraryView(p libraryPage) {
 	@layout("Library", "Library") {
 		<h1 class="h3 mb-3">Library</h1>
 		<nav class="nav nav-underline mb-3" aria-label="What to show">
-			if p.Scoped() {
-				@libraryTab(p, "all", "All", p.Counts[albums]+p.Counts[items])
-			}
 			@libraryTab(p, "albums", "Albums", p.Counts[albums])
 			@libraryTab(p, "items", "Items", p.Counts[items])
 		</nav>
@@ -19,8 +16,6 @@ templ libraryView(p libraryPage) {
 			<div class="alert alert-danger" role="alert">{ p.Error }</div>
 		} else {
 			switch p.Show {
-				case "all":
-					@libraryAll(p)
 				case "items":
 					@libraryToolbar(p, items, p.Items.Total)
 					@librarySelection(items) {
@@ -54,7 +49,7 @@ templ libraryTab(p libraryPage, show, label string, n int) {
 templ libraryQuery(p libraryPage) {
 	{{ chips := p.Chips() }}
 	<form method="get" action="/library" class="mb-2" role="search">
-		if p.Show != "all" {
+		if p.Show != "albums" {
 			<input type="hidden" name="show" value={ p.Show }/>
 		}
 		if p.Sort != "artist" {
@@ -184,38 +179,6 @@ templ librarySelection(k scope) {
 			<button type="button" class="btn btn-sm btn-link text-white-50" data-clear>Clear</button>
 		</div>
 	</form>
-}
-
-// libraryAll is a search across both: its Albums as covers, then its first Items.
-templ libraryAll(p libraryPage) {
-	<section class="mb-4">
-		<div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
-			<h2 class="h6 mb-0">Albums <span class="text-body-secondary fw-normal">{ strconv.Itoa(p.Albums.Total) }</span></h2>
-			<div class="ms-auto d-flex gap-2 align-items-center">
-				if p.Albums.Total > len(p.Albums.Rows) {
-					<a class="small" href={ templ.URL(p.ShowURL("albums")) }>See all { count(p.Albums.Total, albums) }</a>
-				}
-				if p.Albums.Total > 0 {
-					@allMenu(p, albums, p.Albums.Total)
-				}
-			</div>
-		</div>
-		@albumGrid(p.Albums, false)
-	</section>
-	<section>
-		<div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
-			<h2 class="h6 mb-0">Items <span class="text-body-secondary fw-normal">{ strconv.Itoa(p.Items.Total) }</span></h2>
-			<div class="ms-auto d-flex gap-2 align-items-center">
-				if p.Items.Total > len(p.Items.Rows) {
-					<a class="small" href={ templ.URL(p.ShowURL("items")) }>See all { count(p.Items.Total, items) }</a>
-				}
-				if p.Items.Total > 0 {
-					@allMenu(p, items, p.Items.Total)
-				}
-			</div>
-		</div>
-		@itemTable(p.Items, false)
-	</section>
 }
 
 // libraryMore is the next batch, as htmx asks for it while you scroll.

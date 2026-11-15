@@ -44,7 +44,7 @@ func TestLibraryShowsAlbumsAsCoversAndCountsBoth(t *testing.T) {
 		`name="id" value="1"`, `class="selection-bar" hidden`, `src="/public/static/library.js?v=`, "21 Albums", "Artist")
 	body := rec.Body.String()
 	if strings.Contains(body, ">All <") || strings.Contains(body, "Modify all") || strings.Contains(body, "Remove all") {
-		t.Error("with no search: an All tab, or acting on the whole Library")
+		t.Error("with no search: acting on the whole Library")
 	}
 	// The navbar's one link is the Library, active here; its search goes here too.
 	mustContain(t, rec, `class="nav-link active" aria-current="page" href="/library"`, `action="/library"`)
@@ -66,31 +66,16 @@ func TestLibraryAlbumsAsAList(t *testing.T) {
 	}
 }
 
-func TestLibrarySearchShowsAlbumsByDefaultWithAnAllTabToOpen(t *testing.T) {
+func TestLibrarySearchShowsAlbumsByDefaultAndActingOnAll(t *testing.T) {
 	f, h := newTest(t)
 	libraryAPI(f, 2, 27)
 	rec := get(t, h, "/library?q=christmas")
-	mustContain(t, rec, `aria-current="page" href="/library?q=christmas">Albums`, `href="/library?q=christmas&amp;show=all">All`)
+	mustContain(t, rec, `aria-current="page" href="/library?q=christmas">Albums`, `href="/library?q=christmas&amp;show=items">Items`, "All 2 Albums", `href="/modify?q=christmas&amp;scope=albums"`, "Remove all 2…")
+	if strings.Contains(rec.Body.String(), ">All <") {
+		t.Error("an All tab")
+	}
 	if n := len(listCalls(f)["album"]); n != 1 || listCalls(f)["album"][0].Get("limit") != "100" {
 		t.Errorf("asked %v", listCalls(f))
-	}
-}
-
-func TestLibrarySearchHasAnAllTabWithBothAndActingOnAll(t *testing.T) {
-	f, h := newTest(t)
-	libraryAPI(f, 2, 27)
-	rec := get(t, h, "/library?q=christmas&show=all")
-	mustContain(t, rec, `aria-current="page" href="/library?q=christmas&amp;show=all">All <span class="badge text-bg-primary">29</span>`,
-		`href="/library?q=christmas"`, `href="/library?q=christmas&amp;show=items"`,
-		"Albums <span class=\"text-body-secondary fw-normal\">2</span>", "Items <span class=\"text-body-secondary fw-normal\">27</span>",
-		"See all 27 Items", "All 2 Albums", "All 27 Items", `href="/modify?q=christmas&amp;scope=albums"`, "Remove all 27…", `name="q" value="christmas"`)
-	// The overview has nothing to tick: each tab is where to act on some.
-	if strings.Contains(rec.Body.String(), `name="id"`) {
-		t.Error("checkboxes on the All tab")
-	}
-	calls := listCalls(f)
-	if calls["album"][0].Get("limit") != "12" || calls["item"][0].Get("limit") != "10" || !strings.HasPrefix(calls["item"][0].Get("query"), "christmas ") {
-		t.Errorf("asked %v", calls)
 	}
 }
 
@@ -171,8 +156,8 @@ func TestLibraryURL(t *testing.T) {
 		t.Error("plain URLs")
 	}
 	p.Filters.Query = "x"
-	if p.ShowURL("all") != "/library?q=x&show=all" || p.URL(nil) != "/library?q=x" {
-		t.Errorf("searching: %s %s", p.ShowURL("all"), p.URL(nil))
+	if p.ShowURL("items") != "/library?q=x&show=items" || p.URL(nil) != "/library?q=x" {
+		t.Errorf("searching: %s %s", p.ShowURL("items"), p.URL(nil))
 	}
 	if !p.Scoped() || (libraryPage{}).Scoped() {
 		t.Error("scoped")

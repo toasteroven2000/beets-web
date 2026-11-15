@@ -2,7 +2,7 @@ package main
 
 // The Library: one page for browsing and searching Albums and Items, in place
 // of separate Albums, Items and Search pages. A tab picks Albums or Items, each
-// counted for the current search; with a search an All tab shows both. Acting
+// counted for the current search. Acting
 // on everything shown (Modify all, Remove all) is only offered once a search or
 // filter has narrowed it, never for the whole Library.
 
@@ -57,7 +57,7 @@ func librarySort(s string) string {
 
 // libraryPage is the Library as asked for.
 type libraryPage struct {
-	Show       string // "all", "albums" or "items"
+	Show       string // "albums" or "items"
 	View       string // Albums as "grid" or "list"
 	Sort       string
 	Filters    filters
@@ -170,13 +170,6 @@ func libraryURL(k scope) string {
 	return "/library"
 }
 
-// The All tab shows a few of each; the Albums and Items tabs list pageSize at
-// a time, and more load as you scroll.
-const (
-	allAlbums = 12
-	allItems  = 10
-)
-
 func (s *server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	p := libraryPage{Filters: filtersFrom(r), Sort: librarySort(q.Get("sort")), View: "grid", Show: q.Get("show"), Counts: map[scope]int{}}
@@ -184,7 +177,7 @@ func (s *server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 		p.View = "list"
 	}
 	switch {
-	case p.Show == "items", p.Show == "all" && p.Scoped():
+	case p.Show == "items":
 	default:
 		p.Show = "albums"
 	}
@@ -206,11 +199,6 @@ func (s *server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	var err error
 	switch p.Show {
-	case "all":
-		if p.Albums, err = list(albums, allAlbums, 0); err == nil {
-			p.Items, err = list(items, allItems, 0)
-		}
-		p.Albums.Next, p.Items.Next = "", ""
 	case "items":
 		if p.Items, err = list(items, pageSize, offsetParam(r)); err == nil && !isMore(r) {
 			err = count(albums)

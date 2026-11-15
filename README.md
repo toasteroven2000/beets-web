@@ -55,7 +55,7 @@ The Art tab searches the iTunes Search API and the Deezer API (no keys), and fet
 
 ## Library
 
-The **Library** (`/library`) is where Albums and Items are browsed and searched; the old `/albums`, `/items` and `/search` addresses redirect there, and the navbar and Home search lead there too. Tabs show Albums or Items, each counted for the current search; while there is a search an **All** tab shows both, Albums as covers and the first Items. One box takes words or a beets query; year, genre, album type and format sit behind **Filters**, and each filter in use is a chip that removes it. Albums show as covers (with a placeholder where there is no art) or as a list, in an order picked from Sort, and more load as you scroll. Ticking covers or rows brings up a bar to Modify or Remove them. **Modify all** and **Remove all** are only offered once a search or filter narrows the list, never for the whole Library.
+The **Library** (`/library`) is where Albums and Items are browsed and searched; the old `/albums`, `/items` and `/search` addresses redirect there, and the navbar and Home search lead there too. Tabs show Albums or Items, each counted for the current search. One box takes words or a beets query; year, genre, album type and format sit behind **Filters**, and each filter in use is a chip that removes it. Albums show as covers (with a placeholder where there is no art) or as a list, in an order picked from Sort, and more load as you scroll. Ticking covers or rows brings up a bar to Modify or Remove them. **Modify all** and **Remove all** are only offered once a search or filter narrows the list, never for the whole Library.
 
 ## Import
 
