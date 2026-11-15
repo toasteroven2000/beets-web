@@ -189,3 +189,17 @@ func TestLibraryArtistFilterQueriesEachScopeByItsOwnField(t *testing.T) {
 		t.Errorf("Items query: %s", q)
 	}
 }
+
+func TestNavbarHasNoSearchAndLibraryHasSearchHelp(t *testing.T) {
+	f, h := newTest(t)
+	libraryAPI(f, 1, 1)
+	rec := get(t, h, "/library")
+	body := rec.Body.String()
+	if n := strings.Count(body, `role="search"`); n != 1 {
+		t.Errorf("%d search forms; the Library's alone is wanted", n)
+	}
+	mustContain(t, rec, "Search help", `id="search-help"`, "Search uses beets' query syntax", "To use Regexp", "Common fields", `placeholder="Search the Library, or a beets query`)
+	if strings.Contains(get(t, h, "/import").Body.String(), `role="search"`) {
+		t.Error("a navbar search on the Import page")
+	}
+}

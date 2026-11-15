@@ -69,8 +69,12 @@ templ libraryQuery(p libraryPage) {
 					<span class="badge text-bg-primary">{ strconv.Itoa(len(chips)) }</span>
 				}
 			</button>
+			<button type="button" class="btn btn-outline-secondary text-nowrap" data-bs-toggle="collapse" data-bs-target="#search-help" aria-expanded="false" aria-controls="search-help">
+				<i class="bi bi-question-circle" aria-hidden="true"></i> Search help
+			</button>
 			<button class="btn btn-primary">Search</button>
 		</div>
+		@searchHelp()
 		<div class="collapse" id="library-filters">
 			<div class="d-flex flex-wrap gap-3 align-items-end pt-2">
 				<div>
@@ -330,4 +334,47 @@ templ itemRows(t tableData, pick bool) {
 			<td colspan="7" class="text-center text-body-secondary small">Loading more…</td>
 		</tr>
 	}
+}
+
+// searchHelp is beets' query syntax, in brief, behind the Search help button.
+templ searchHelp() {
+	<div class="collapse" id="search-help">
+		<div class="card card-body mt-2 search-help">
+			<div class="row g-4">
+				<div class="col-md-6">
+					<h2 class="h6">Search uses beets' query syntax</h2>
+					<ul class="small">
+						<li>combine keywords with a space (AND): <code>magnetic tomorrow</code></li>
+						<li>combine keywords with a comma (OR): <code>magnetic tomorrow , beatles yesterday</code></li>
+						<li>search specific fields: <code>artist:dream</code></li>
+						<li>escape phrases: <code>"the rebel"</code> or <code>the\ rebel</code></li>
+						<li>use <code>-</code> or <code>^</code> to exclude a term: <code>^difficult</code></li>
+					</ul>
+					<h2 class="h6">Exact matches</h2>
+					<ul class="small mb-md-0">
+						<li><code>artist:air</code> substring match, default</li>
+						<li><code>artist:=~air</code> exact match, ignore case</li>
+						<li><code>artist:=AIR</code> exact match, case sensitive</li>
+						<li>work on phrases: <code>artist:=~"dave matthews"</code></li>
+						<li>can be used across <em>all</em> fields: <code>=~crash</code></li>
+					</ul>
+				</div>
+				<div class="col-md-6">
+					<h2 class="h6">To use Regexp, add an extra <code>:</code></h2>
+					<ul class="small">
+						<li><code>"artist::Ann(a|ie)"</code> finds artists Anna Calvi and Annie but not Annuals</li>
+						<li><code>":Ho[pm]eless"</code> to search all fields</li>
+					</ul>
+					<h2 class="h6">Common fields</h2>
+					<ul class="small mb-0">
+						<li><code>title</code> <code>album</code> <code>genre</code> <code>label</code> <code>isrc</code></li>
+						<li><code>artist</code> (only for Items, not Albums)</li>
+						<li><code>albumartist</code> <code>albumartist_sort</code> <code>albumtype</code></li>
+						<li><code>year</code> <code>added</code> <code>comment</code> <code>data_source</code></li>
+						<li><code>path</code> (searches recursively in sub directories)</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+	</div>
 }
