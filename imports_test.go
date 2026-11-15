@@ -210,6 +210,14 @@ func TestAlbumPromptShowsCandidatesAndChoices(t *testing.T) {
 	}
 }
 
+func TestPromptTracksCanBePlayedFromTheFilesBeingImported(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, albumPrompt()) }
+	f.routes["GET /config"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{}) }
+	rec := get(t, h, "/imports/7")
+	mustContain(t, rec, `data-play="/import-paths/audio?path=%2Fin%2Fa%2F01.mp3"`, `src="/public/static/player.js?v=`)
+}
+
 func TestCandidateListsEveryTrackByDiscWithArrowsOnlyOnChanges(t *testing.T) {
 	f, h := newTest(t)
 	track := func(disc, n int, old, new string) map[string]any {

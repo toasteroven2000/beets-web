@@ -389,6 +389,7 @@ func lengthText(v any) string {
 // trackRow is one file and the track it would become.
 type trackRow struct {
 	File                               string
+	Path                               string // the file, to play
 	Disc                               string
 	OldNum, OldTitle, NewNum, NewTitle string
 	Length                             string
@@ -414,6 +415,7 @@ func candidateTracks(c candidate) []trackRow {
 		}
 		r := trackRow{
 			File:   baseName(f.Path),
+			Path:   f.Path,
 			Disc:   side("disc", false),
 			OldNum: side("track", true), NewNum: side("track", false),
 			OldTitle: side("title", true), NewTitle: side("title", false),

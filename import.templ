@@ -580,7 +580,11 @@ templ verdictLines(p importPrompt, v verdict, best bool) {
 				<summary>Renames { strconv.Itoa(len(v.Renames)) } of { plural(v.Tracks(), "track", "tracks") }</summary>
 				<div class="small mt-1">
 					for _, r := range v.Renames {
-						<div><span class="text-body-secondary font-monospace me-2">{ r.NewNum }</span>@delta(r.OldTitle, r.NewTitle)</div>
+						<div>
+							@playTrackFile(r)
+							<span class="text-body-secondary font-monospace me-2">{ r.NewNum }</span>
+							@delta(r.OldTitle, r.NewTitle)
+						</div>
 					}
 				</div>
 			</details>
@@ -868,6 +872,7 @@ templ candidateDetails(p importPrompt, c candidate) {
 									<tr class={ templ.KV("changed", r.Changed()) }>
 										<td class="text-body-secondary font-monospace text-end pe-2 track-num">{ orDash(r.NewNum) }</td>
 										<td>
+											@playTrackFile(r)
 											if r.TitleChanged {
 												@delta(r.OldTitle, r.NewTitle)
 											} else {

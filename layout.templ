@@ -161,3 +161,11 @@ templ playButton(src, title string) {
 templ playItem(id int, artist, title string) {
 	@playButton("/items/"+strconv.Itoa(id)+"/audio", strings.TrimSpace(artist+" – "+title))
 }
+
+// playTrackFile plays the file an Import candidate's track row is for, which
+// is waiting under an Import Path.
+templ playTrackFile(r trackRow) {
+	if r.Path != "" && isAudioFile(r.Path) {
+		@playButton(importAudioURL(r.Path), r.File)
+	}
+}
