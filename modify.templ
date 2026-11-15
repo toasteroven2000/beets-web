@@ -37,7 +37,15 @@ templ modificationView(m modification) {
 	@layout("Modification", "Modifications") {
 		@pageHeader("Modification", msTime(m.CreatedAt)) {
 		}
-		<div id="modification" if inProgress(m.Status) { hx-get={ "/modifications/" + string(m.ID) } hx-trigger="every 1s" hx-select="#modification" hx-swap="outerHTML" }>
+		<div
+			id="modification"
+			if inProgress(m.Status) {
+				hx-get={ "/modifications/" + string(m.ID) }
+				hx-trigger="every 1s"
+				hx-select="#modification"
+				hx-swap="outerHTML"
+			}
+		>
 			@requestSummary(m)
 			@outcome(m)
 			@preview(m)
@@ -87,6 +95,18 @@ templ requestSummary(m modification) {
 
 templ outcome(m modification) {
 	switch m.Status {
+		case "previewing":
+			<div class="alert alert-info d-flex align-items-center gap-2">
+				<div class="spinner-border spinner-border-sm" role="status"></div>
+				Building the Preview…
+			</div>
+		case "failed":
+			<div class="alert alert-danger">
+				The Preview failed: { orDash(m.Result.Error) }
+				<form method="post" action={ templ.URL("/modifications/" + string(m.ID) + "/again") } class="mt-2">
+					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
+				</form>
+			</div>
 		case "awaiting_confirmation":
 			<form method="post" action={ templ.URL("/modifications/" + string(m.ID) + "/confirm") } class="d-flex flex-wrap gap-2 align-items-center mb-3">
 				<button class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> Confirm { previewCount(m) }</button>
@@ -132,7 +152,11 @@ templ outcome(m modification) {
 			</div>
 		case "interrupted":
 			<div class="alert alert-warning">
-				beets-api restarted while this was running. { records(len(m.Result.Applied)) } had been applied.
+				if len(m.Result.Preview.Albums)+len(m.Result.Preview.Items) == 0 {
+					beets-api restarted before the Preview was ready.
+				} else {
+					beets-api restarted while this was running. { records(len(m.Result.Applied)) } had been applied.
+				}
 				<form method="post" action={ templ.URL("/modifications/" + string(m.ID) + "/again") } class="mt-2">
 					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
 				</form>

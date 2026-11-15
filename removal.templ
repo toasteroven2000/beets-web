@@ -39,6 +39,18 @@ templ removalView(rm removal, trashMissing bool) {
 templ removalOutcome(rm removal, trashMissing bool) {
 	{{ id := string(rm.ID) }}
 	switch rm.Status {
+		case "previewing":
+			<div class="alert alert-info d-flex align-items-center gap-2">
+				<div class="spinner-border spinner-border-sm" role="status"></div>
+				Building the Preview…
+			</div>
+		case "failed":
+			<div class="alert alert-danger">
+				The Preview failed: { orDash(rm.Result.Error) }
+				<form method="post" action={ templ.URL("/removals/" + id + "/again") } class="mt-2">
+					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
+				</form>
+			</div>
 		case "awaiting_confirmation":
 			<div class="alert alert-danger">
 				<strong>Confirming removes { removalPreviewCount(rm) } from the Library and moves { plural(removalFileCount(rm), "file", "files") } to the Trash.</strong>
@@ -96,7 +108,11 @@ templ removalOutcome(rm removal, trashMissing bool) {
 			</div>
 		case "interrupted":
 			<div class="alert alert-warning">
-				beets-api restarted while this was running. { records(len(rm.Result.Removed)) } had been removed.
+				if len(rm.Result.Preview.Albums)+len(rm.Result.Preview.Items) == 0 {
+					beets-api restarted before the Preview was ready.
+				} else {
+					beets-api restarted while this was running. { records(len(rm.Result.Removed)) } had been removed.
+				}
 				<form method="post" action={ templ.URL("/removals/" + id + "/again") } class="mt-2">
 					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
 				</form>

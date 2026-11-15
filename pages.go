@@ -293,9 +293,9 @@ func statusClass(status string) string {
 		return "text-bg-success"
 	case "awaiting_confirmation":
 		return "text-bg-primary"
-	case "queued", "applying":
+	case "previewing", "queued", "applying":
 		return "text-bg-info"
-	case "partial", "rejected", "interrupted":
+	case "partial", "rejected", "interrupted", "failed":
 		return "text-bg-danger"
 	}
 	return "text-bg-secondary"
@@ -306,7 +306,7 @@ func statusText(status string) string {
 }
 
 func inProgress(status string) bool {
-	return status == "queued" || status == "applying"
+	return status == "previewing" || status == "queued" || status == "applying"
 }
 
 func sortedKeys[V any](m map[string]V) []string {

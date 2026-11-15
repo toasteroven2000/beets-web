@@ -93,8 +93,24 @@ templ importStartView(p importStartPage) {
 						</tbody>
 					</table>
 				}
+				@importEntriesPaging(p)
 			</form>
 		}
+	}
+}
+
+// importEntriesPaging steps through a folder with more entries than one page.
+templ importEntriesPaging(p importStartPage) {
+	if p.Browse.Total > len(p.Browse.Entries) {
+		<div class="d-flex gap-2 align-items-center">
+			if p.Browse.Offset > 0 {
+				<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.PathsPageURL(max(0, p.Browse.Offset-importEntriesPerPage))) }><i class="bi bi-chevron-left" aria-hidden="true"></i> Earlier</a>
+			}
+			if p.Browse.Offset+len(p.Browse.Entries) < p.Browse.Total {
+				<a class="btn btn-sm btn-outline-secondary" href={ templ.URL(p.PathsPageURL(p.Browse.Offset + importEntriesPerPage)) }>Later <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+			}
+			<span class="small text-body-secondary">{ strconv.Itoa(p.Browse.Offset+1) }–{ strconv.Itoa(p.Browse.Offset+len(p.Browse.Entries)) } of { strconv.Itoa(p.Browse.Total) }</span>
+		</div>
 	}
 }
 
@@ -170,7 +186,7 @@ templ importView(pg importPage) {
 		</nav>
 		<div
 			id="import"
-			if op.Status == "running" {
+			if op.Status == "running" || op.Undoing {
 				hx-get={ pg.PollURL() }
 				hx-trigger="every 1s"
 				hx-select="#import"
@@ -198,6 +214,15 @@ templ importView(pg importPage) {
 				<div class="small text-body-secondary mb-3">Started by { *op.Result.Actor }</div>
 			} else {
 				<div class="mb-3"></div>
+			}
+			if op.Undoing {
+				<div class="alert alert-info d-flex align-items-center gap-2 py-2">
+					<div class="spinner-border spinner-border-sm" role="status"></div>
+					Undoing this Import: moving the files it copied in to the Trash…
+				</div>
+			}
+			if op.Result.UndoError != "" {
+				<div class="alert alert-danger py-2">The undo didn't finish: { op.Result.UndoError }</div>
 			}
 			if pg.Stale {
 				<div class="alert alert-info py-2">That prompt had already moved on; this is where the Import is now.</div>
@@ -667,7 +692,7 @@ templ importOutcomes(op importOp) {
 		<a class="small" href={ templ.URL(importAuditURL(op)) }><i class="bi bi-journal-text" aria-hidden="true"></i> What this Import changed, in the Audit</a>
 		if op.Result.Undone != nil {
 			<span class="small text-body-secondary"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Undone { shortTime(op.Result.Undone.At) }</span>
-		} else if importedCount(op) > 0 && !importActive(op.Status) {
+		} else if importedCount(op) > 0 && !importActive(op.Status) && !op.Undoing {
 			<a class="btn btn-sm btn-outline-danger" href={ templ.URL("/imports/" + string(op.ID) + "/undo") }><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Undo this Import…</a>
 		}
 	</div>

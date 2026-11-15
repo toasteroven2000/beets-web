@@ -145,6 +145,18 @@ templ purgeOutcome(p purge, trashMissing bool) {
 	{{ id := string(p.ID) }}
 	{{ files, size := purgeTotals(p) }}
 	switch p.Status {
+		case "previewing":
+			<div class="alert alert-info d-flex align-items-center gap-2">
+				<div class="spinner-border spinner-border-sm" role="status"></div>
+				Building the Preview…
+			</div>
+		case "failed":
+			<div class="alert alert-danger">
+				The Preview failed: { orDash(p.Result.Error) }
+				<form method="post" action={ templ.URL("/purges/" + id + "/again") } class="mt-2">
+					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
+				</form>
+			</div>
 		case "awaiting_confirmation":
 			<div class="alert alert-danger">
 				<strong>Confirming deletes { plural(files, "file", "files") } ({ bytesText(size) }) from { plural(len(p.Result.Preview.Folders), "folder", "folders") } { "for good." }</strong>
@@ -195,7 +207,11 @@ templ purgeOutcome(p purge, trashMissing bool) {
 			</div>
 		case "interrupted":
 			<div class="alert alert-warning">
-				beets-api restarted while this was running. { plural(len(p.Result.Purged), "folder", "folders") } had been purged.
+				if len(p.Result.Preview.Folders) == 0 {
+					beets-api restarted before the Preview was ready.
+				} else {
+					beets-api restarted while this was running. { plural(len(p.Result.Purged), "folder", "folders") } had been purged.
+				}
 				<form method="post" action={ templ.URL("/purges/" + id + "/again") } class="mt-2">
 					<button class="btn btn-primary"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Preview again</button>
 				</form>

@@ -442,6 +442,9 @@ type importEntry struct {
 type importBrowse struct {
 	Path    *string       `json:"path"`
 	Parent  *string       `json:"parent"`
+	Total   int           `json:"total"` // children of the folder, of which Entries is a page
+	Limit   int           `json:"limit"`
+	Offset  int           `json:"offset"`
 	Entries []importEntry `json:"entries"`
 }
 
@@ -521,6 +524,7 @@ type importResult struct {
 	Undone        *struct {
 		At string `json:"at"`
 	} `json:"undone"` // set once the Import has been undone
+	UndoError string `json:"undo_error"` // why an undo that started didn't finish
 }
 
 // importOp is one Import. Status is running, waiting_for_choice, completed,
@@ -530,7 +534,8 @@ type importOp struct {
 	Status    string        `json:"status"`
 	Request   importRequest `json:"request"`
 	Result    importResult  `json:"result"`
-	Counts    *importCounts `json:"counts"` // only in the Imports list
+	Counts    *importCounts `json:"counts"`  // only in the Imports list
+	Undoing   bool          `json:"undoing"` // beets-api is moving the Import's files to the Trash
 	CreatedAt string        `json:"created_at"`
 	UpdatedAt string        `json:"updated_at"`
 }
@@ -559,8 +564,8 @@ type choiceRequest struct {
 }
 
 // ImportPaths lists the Import Paths, or with a path, that directory's children.
-func (c *beetsAPI) ImportPaths(ctx context.Context, path string) (importBrowse, error) {
-	v := url.Values{}
+func (c *beetsAPI) ImportPaths(ctx context.Context, path string, offset int) (importBrowse, error) {
+	v := url.Values{"limit": {strconv.Itoa(importEntriesPerPage)}, "offset": {strconv.Itoa(offset)}}
 	if path != "" {
 		v.Set("path", path)
 	}

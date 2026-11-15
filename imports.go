@@ -60,6 +60,25 @@ const importsPerPage = 50
 var importStatuses = []string{"running", "waiting_for_choice", "completed", "aborted", "failed"}
 
 // PathsURL is the Import Paths tab, at the folder being browsed.
+// importEntriesPerPage is how many files and folders the Import Paths tab asks
+// for at once.
+const importEntriesPerPage = 200
+
+// PathsPageURL is the folder being browsed, from another entry on.
+func (p importStartPage) PathsPageURL(offset int) string {
+	v := url.Values{}
+	if p.Here() != "" {
+		v.Set("path", p.Here())
+	}
+	if offset > 0 {
+		v.Set("offset", strconv.Itoa(offset))
+	}
+	if len(v) == 0 {
+		return "/import"
+	}
+	return "/import?" + v.Encode()
+}
+
 func (p importStartPage) PathsURL() string {
 	if p.Here() == "" {
 		return "/import"
@@ -557,11 +576,11 @@ func (s *server) handleImportStart(w http.ResponseWriter, r *http.Request) {
 func (s *server) importStartPage(ctx context.Context, tab, dir, status string, offset int) importStartPage {
 	p := importStartPage{Tab: tab, Status: status, Offset: offset}
 	if tab == "paths" {
-		b, err := s.api.ImportPaths(ctx, dir)
+		b, err := s.api.ImportPaths(ctx, dir, offset)
 		if err != nil {
 			p.Error = sentence(errorMessage(err))
 			if dir != "" {
-				b, _ = s.api.ImportPaths(ctx, "")
+				b, _ = s.api.ImportPaths(ctx, "", 0)
 			}
 		}
 		p.Browse = b
@@ -763,12 +782,14 @@ func (s *server) handleImportUndo(w http.ResponseWriter, r *http.Request) {
 	render(w, http.StatusOK, importUndoView(op, plan))
 }
 
-// handleImportUndoConfirm undoes the Import, then shows its removals in the
-// Audit. A 409 means it may no longer be undone; the preview says why.
+// handleImportUndoConfirm starts undoing the Import, which beets-api does in the
+// background, and shows the Import while it does.
 func (s *server) handleImportUndoConfirm(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	err := s.api.UndoImport(r.Context(), id)
-	if isStatus(err, http.StatusConflict) {
+	// 409: it may not be undone, which the preview says why. Except when another
+	// undo is running, which only the refusal says.
+	if isStatus(err, http.StatusConflict) && !strings.Contains(errorMessage(err), "is still running") {
 		http.Redirect(w, r, "/imports/"+url.PathEscape(id)+"/undo", http.StatusSeeOther)
 		return
 	}
@@ -776,7 +797,8 @@ func (s *server) handleImportUndoConfirm(w http.ResponseWriter, r *http.Request)
 		fail(w, err)
 		return
 	}
-	http.Redirect(w, r, "/audit?"+url.Values{"operation": {id}}.Encode(), http.StatusSeeOther)
+	// It is under way, not done: the Import page follows it, then links its removals.
+	http.Redirect(w, r, "/imports/"+url.PathEscape(id), http.StatusSeeOther)
 }
 
 // importedCount is how many Items an Import put in the Library.

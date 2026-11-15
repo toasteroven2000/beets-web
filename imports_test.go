@@ -393,13 +393,47 @@ func TestUndoPreviewExplainsWhyItCannotBeUndone(t *testing.T) {
 	}
 }
 
-func TestConfirmingUndoShowsItsRemovalsInTheAudit(t *testing.T) {
+func TestConfirmingUndoShowsTheImportWhileItRunsInTheBackground(t *testing.T) {
 	f, h := newTest(t)
-	f.routes["POST /imports/7/undo"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{}) }
+	f.routes["POST /imports/7/undo"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 202, map[string]any{}) }
 	rec := post(t, h, "/imports/7/undo", nil)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/audit?operation=7" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/imports/7" {
 		t.Errorf("got %d %s", rec.Code, rec.Header().Get("Location"))
 	}
+}
+
+func TestAnUndoAlreadyRunningIsSaidNotHiddenBehindThePreview(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["POST /imports/7/undo"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 409, map[string]any{"detail": "an undo of import 5 is still running"})
+	}
+	rec := post(t, h, "/imports/7/undo", nil)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("got %d", rec.Code)
+	}
+	mustContain(t, rec, "an undo of import 5 is still running")
+}
+
+func TestImportPageFollowsAnUndoUntilItFinishes(t *testing.T) {
+	f, h := newTest(t)
+	op := finishedImport(nil)
+	op["undoing"] = true
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, op) }
+	rec := get(t, h, "/imports/7")
+	mustContain(t, rec, "Undoing this Import", `hx-trigger="every 1s"`)
+	if strings.Contains(rec.Body.String(), "Undo this Import…") {
+		t.Error("offers to undo an Import that is being undone")
+	}
+	op["undoing"] = false
+	op["result"].(map[string]any)["undone"] = map[string]any{"at": "2026-11-15T10:00:00+00:00"}
+	rec = get(t, h, "/imports/7")
+	mustContain(t, rec, "Undone")
+	if strings.Contains(rec.Body.String(), "every 1s") || strings.Contains(rec.Body.String(), "Undoing this Import") {
+		t.Error("still following an undo that finished")
+	}
+	delete(op["result"].(map[string]any), "undone")
+	op["result"].(map[string]any)["undo_error"] = "the Trash is not configured"
+	mustContain(t, get(t, h, "/imports/7"), "The undo didn't finish: the Trash is not configured")
 }
 
 func TestUndoRefusedAfterThePreviewGoesBackToThePreview(t *testing.T) {
