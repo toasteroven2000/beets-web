@@ -57,15 +57,15 @@ func librarySort(s string) string {
 
 // libraryPage is the Library as asked for.
 type libraryPage struct {
-	Show    string // "all", "albums" or "items"
-	View    string // Albums as "grid" or "list"
-	Sort    string
-	Filters filters
+	Show       string // "all", "albums" or "items"
+	View       string // Albums as "grid" or "list"
+	Sort       string
+	Filters    filters
 	Separators []string
-	Counts  map[scope]int
-	Albums  tableData
-	Items   tableData
-	Error   string
+	Counts     map[scope]int
+	Albums     tableData
+	Items      tableData
+	Error      string
 }
 
 // Scoped tells whether a search or filter narrows the Library. Only then is
