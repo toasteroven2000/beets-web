@@ -87,7 +87,7 @@ func (p libraryPage) URL(change func(*libraryPage)) string {
 			v.Set(k, val)
 		}
 	}
-	if q.Show != "albums" || q.Scoped() {
+	if q.Show != "albums" {
 		set("show", q.Show)
 	}
 	set("q", q.Filters.Query)
@@ -184,9 +184,7 @@ func (s *server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 		p.View = "list"
 	}
 	switch {
-	case p.Show == "items" || p.Show == "albums":
-	case p.Show == "all" && p.Scoped(), p.Show == "" && p.Scoped():
-		p.Show = "all"
+	case p.Show == "items", p.Show == "all" && p.Scoped():
 	default:
 		p.Show = "albums"
 	}

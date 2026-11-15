@@ -66,12 +66,22 @@ func TestLibraryAlbumsAsAList(t *testing.T) {
 	}
 }
 
-func TestLibrarySearchHasAnAllTabWithBothAndActingOnAll(t *testing.T) {
+func TestLibrarySearchShowsAlbumsByDefaultWithAnAllTabToOpen(t *testing.T) {
 	f, h := newTest(t)
 	libraryAPI(f, 2, 27)
 	rec := get(t, h, "/library?q=christmas")
+	mustContain(t, rec, `aria-current="page" href="/library?q=christmas">Albums`, `href="/library?q=christmas&amp;show=all">All`)
+	if n := len(listCalls(f)["album"]); n != 1 || listCalls(f)["album"][0].Get("limit") != "100" {
+		t.Errorf("asked %v", listCalls(f))
+	}
+}
+
+func TestLibrarySearchHasAnAllTabWithBothAndActingOnAll(t *testing.T) {
+	f, h := newTest(t)
+	libraryAPI(f, 2, 27)
+	rec := get(t, h, "/library?q=christmas&show=all")
 	mustContain(t, rec, `aria-current="page" href="/library?q=christmas&amp;show=all">All <span class="badge text-bg-primary">29</span>`,
-		`href="/library?q=christmas&amp;show=albums"`, `href="/library?q=christmas&amp;show=items"`,
+		`href="/library?q=christmas"`, `href="/library?q=christmas&amp;show=items"`,
 		"Albums <span class=\"text-body-secondary fw-normal\">2</span>", "Items <span class=\"text-body-secondary fw-normal\">27</span>",
 		"See all 27 Items", "All 2 Albums", "All 27 Items", `href="/modify?q=christmas&amp;scope=albums"`, "Remove all 27…", `name="q" value="christmas"`)
 	// The overview has nothing to tick: each tab is where to act on some.
@@ -89,8 +99,8 @@ func TestLibraryFiltersAreChipsAndScopeActingOnAll(t *testing.T) {
 	libraryAPI(f, 4, 52)
 	rec := get(t, h, "/library?show=albums&year_from=1990&year_to=1999&albumtype=album")
 	mustContain(t, rec, "year 1990–1999", "album type: album", `Filters`, `<span class="badge text-bg-primary">2</span>`,
-		`href="/library?albumtype=album&amp;show=albums"`,                 // without the years
-		`href="/library?show=albums&amp;year_from=1990&amp;year_to=1999"`, // without the type
+		`href="/library?albumtype=album"`,                 // without the years
+		`href="/library?year_from=1990&amp;year_to=1999"`, // without the type
 		"Clear filters", "All 4 Albums")
 	if got := listCalls(f)["album"][0].Get("query"); got != "year:1990..1999 'albumtype:album' albumartist+ year+ album+" {
 		t.Errorf("query %q", got)
@@ -161,7 +171,7 @@ func TestLibraryURL(t *testing.T) {
 		t.Error("plain URLs")
 	}
 	p.Filters.Query = "x"
-	if p.ShowURL("all") != "/library?q=x&show=all" || p.URL(nil) != "/library?q=x&show=albums" {
+	if p.ShowURL("all") != "/library?q=x&show=all" || p.URL(nil) != "/library?q=x" {
 		t.Errorf("searching: %s %s", p.ShowURL("all"), p.URL(nil))
 	}
 	if !p.Scoped() || (libraryPage{}).Scoped() {
