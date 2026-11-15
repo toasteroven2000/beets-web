@@ -1,0 +1,34 @@
+package main
+
+// configView lists beets' config, with the secrets beets-api redacted.
+templ configView(rows []configRow) {
+	@layout("Config", "Config") {
+		@pageHeader("Config", "beets' configuration, defaults included. beets-api redacts the secrets.") {
+		}
+		if len(rows) == 0 {
+			<p class="text-body-secondary">beets-api returned no config.</p>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-sm align-middle w-auto">
+					<thead>
+						<tr><th>Setting</th><th>Value</th></tr>
+					</thead>
+					<tbody>
+						for _, r := range rows {
+							<tr>
+								<th class="fw-normal font-monospace">{ r.Key }</th>
+								<td>
+									if r.Value == "" {
+										<span class="text-body-secondary">empty</span>
+									} else {
+										<span class="font-monospace">{ r.Value }</span>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
