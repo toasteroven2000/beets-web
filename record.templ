@@ -12,10 +12,10 @@ templ recordView(p recordPage) {
 
 // itemView is an Item: where it is, and every field to Modify.
 templ itemView(p recordPage) {
-	@layout(recordTitle(p), p.Scope.Title()) {
+	@layout(recordTitle(p), "Library") {
 		<nav aria-label="breadcrumb">
 			<ol class="breadcrumb">
-				<li class="breadcrumb-item"><a href={ templ.URL("/" + string(p.Scope)) }>{ p.Scope.Title() }</a></li>
+				<li class="breadcrumb-item"><a href={ templ.URL(libraryURL(items)) }>Library</a></li>
 				if p.Album != nil {
 					<li class="breadcrumb-item"><a href={ templ.URL(recordURL(albums, p.Album.ID())) }>{ orDash(p.Album.Str("album")) }</a></li>
 				}

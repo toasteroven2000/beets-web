@@ -109,7 +109,6 @@ type filters struct {
 	Genre     string
 	AlbumType string
 	Format    string
-	Recent    bool // sort by most recently added
 }
 
 func (f filters) Combined() string {
@@ -134,21 +133,6 @@ func (f filters) Combined() string {
 
 func (f filters) Active() bool {
 	return f.YearFrom != "" || f.YearTo != "" || f.Genre != "" || f.AlbumType != "" || f.Format != ""
-}
-
-// withSort adds the UI's order to a query, unless the query already sorts.
-func withSort(query string, k scope, recent bool) string {
-	if hasSort(query) {
-		return query
-	}
-	s := "artist+ album+ disc+ track+"
-	if k == albums {
-		s = "albumartist+ year+ album+"
-	}
-	if recent {
-		s = "added-"
-	}
-	return strings.TrimSpace(query + " " + s)
 }
 
 // hasSort reports whether a query has a beets sort term: one ending in + or -

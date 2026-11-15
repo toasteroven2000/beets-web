@@ -35,9 +35,10 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /{$}", s.handleHome)
 	mux.HandleFunc("GET /artists", s.handleArtists)
 	mux.HandleFunc("GET /artists/{name}", s.handleArtist)
-	mux.HandleFunc("GET /albums", s.handleList(albums))
-	mux.HandleFunc("GET /items", s.handleList(items))
-	mux.HandleFunc("GET /search", s.handleSearch)
+	mux.HandleFunc("GET /library", s.handleLibrary)
+	mux.HandleFunc("GET /albums", redirectToLibrary("albums"))
+	mux.HandleFunc("GET /items", redirectToLibrary("items"))
+	mux.HandleFunc("GET /search", redirectToLibrary(""))
 	mux.HandleFunc("GET /albums/{id}", s.handleRecord(albums))
 	mux.HandleFunc("GET /items/{id}", s.handleRecord(items))
 	mux.HandleFunc("GET /albums/{id}/art", s.handleArt)
@@ -147,9 +148,9 @@ var listFields = map[scope][]string{
 	items:  {"id", "artist", "title", "album", "album_id", "track", "tracktotal", "disc", "disctitle", "length", "format", "bitrate", "trackdisambig", "year", "added"},
 }
 
-func (s *server) table(r *http.Request, k scope, query string, recent bool) (tableData, error) {
+func (s *server) table(r *http.Request, k scope, query string) (tableData, error) {
 	ctx := r.Context()
-	res, err := s.api.List(ctx, k, withSort(query, k, recent), pageSize, offsetParam(r), listFields[k])
+	res, err := s.api.List(ctx, k, sortQuery(query, k, "artist"), pageSize, offsetParam(r), listFields[k])
 	if err != nil {
 		return tableData{}, err
 	}
@@ -198,7 +199,7 @@ func (s *server) handleArtist(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p.Tab = k
-	t, err := s.table(r, k, p.Queries[k], false)
+	t, err := s.table(r, k, p.Queries[k])
 	if err != nil {
 		fail(w, err)
 		return
@@ -225,27 +226,6 @@ func filtersFrom(r *http.Request) filters {
 		Genre:     get("genre"),
 		AlbumType: get("albumtype"),
 		Format:    get("format"),
-		Recent:    q.Get("order") == "recent",
-	}
-}
-
-func (s *server) handleList(k scope) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		f := filtersFrom(r)
-		t, err := s.table(r, k, f.Combined(), f.Recent)
-		if err != nil {
-			if isStatus(err, http.StatusBadRequest) && !isMore(r) {
-				render(w, http.StatusBadRequest, listView(listPage{Scope: k, Filters: f, Error: errorMessage(err)}))
-				return
-			}
-			fail(w, err)
-			return
-		}
-		if isMore(r) {
-			render(w, http.StatusOK, tableRows(t))
-			return
-		}
-		render(w, http.StatusOK, listView(listPage{Scope: k, Filters: f, Table: t}))
 	}
 }
 
@@ -255,32 +235,11 @@ const recentAlbumCount = 12
 // handleHome shows the search bar and the newest Albums. The page works
 // without them: if beets-api can't list Albums, only the search bar shows.
 func (s *server) handleHome(w http.ResponseWriter, r *http.Request) {
-	res, err := s.api.List(r.Context(), albums, withSort("", albums, true), recentAlbumCount, 0, listFields[albums])
+	res, err := s.api.List(r.Context(), albums, sortQuery("", albums, "recent"), recentAlbumCount, 0, listFields[albums])
 	if err != nil {
 		log.Printf("home: recent albums: %v", err)
 	}
 	render(w, http.StatusOK, homeView(res.Results))
-}
-
-func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	p := searchPage{Query: strings.TrimSpace(r.URL.Query().Get("q")), Tables: map[scope]tableData{}}
-	if p.Query != "" {
-		seps := s.separators(ctx)
-		for _, k := range []scope{albums, items} {
-			res, err := s.api.List(ctx, k, withSort(p.Query, k, false), 10, 0, listFields[k])
-			if isStatus(err, http.StatusBadRequest) {
-				p.Error = errorMessage(err)
-				break
-			}
-			if err != nil {
-				fail(w, err)
-				return
-			}
-			p.Tables[k] = tableData{Scope: k, Query: p.Query, Rows: res.Results, Total: res.Total, Separators: seps}
-		}
-	}
-	render(w, http.StatusOK, searchView(p))
 }
 
 func idParam(w http.ResponseWriter, r *http.Request) (int, bool) {

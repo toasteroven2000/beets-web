@@ -22,12 +22,11 @@ templ layout(title string, active string) {
 					<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#main-nav" aria-controls="main-nav" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
 					<div class="collapse navbar-collapse" id="main-nav">
 						<ul class="navbar-nav me-auto">
-							@navLink("/albums", "disc", "Albums", active)
-							@navLink("/items", "music-note", "Items", active)
+							@navLink("/library", "collection", "Library", active)
 							@navLink("/import", "box-arrow-in-down", "Import", active)
 						</ul>
 						if active != "Home" {
-							<form class="d-flex me-md-2 my-2 my-md-0" role="search" method="get" action="/search">
+							<form class="d-flex me-md-2 my-2 my-md-0" role="search" method="get" action="/library">
 								<input class="form-control form-control-sm" type="search" name="q" placeholder="Search the Library" aria-label="Search the Library"/>
 							</form>
 						}

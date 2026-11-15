@@ -123,10 +123,10 @@ templ artResults(id int, found []artCandidate, problems []string) {
 templ artCompareView(p artComparePage) {
 	{{ id := p.Album.ID() }}
 	{{ title := orDash(p.Album.Str("album")) }}
-	@layout("Set art · "+title, "Albums") {
+	@layout("Set art · "+title, "Library") {
 		<nav aria-label="breadcrumb">
 			<ol class="breadcrumb">
-				<li class="breadcrumb-item"><a href="/albums">Albums</a></li>
+				<li class="breadcrumb-item"><a href="/library">Library</a></li>
 				<li class="breadcrumb-item"><a href={ templ.URL(recordTabURL(albums, id, "art")) }>{ title }</a></li>
 				<li class="breadcrumb-item active" aria-current="page">Set art</li>
 			</ol>
@@ -166,10 +166,10 @@ templ artCompareView(p artComparePage) {
 templ artRemoveView(album record, current artInfo) {
 	{{ id := album.ID() }}
 	{{ title := orDash(album.Str("album")) }}
-	@layout("Remove art · "+title, "Albums") {
+	@layout("Remove art · "+title, "Library") {
 		<nav aria-label="breadcrumb">
 			<ol class="breadcrumb">
-				<li class="breadcrumb-item"><a href="/albums">Albums</a></li>
+				<li class="breadcrumb-item"><a href="/library">Library</a></li>
 				<li class="breadcrumb-item"><a href={ templ.URL(recordTabURL(albums, id, "art")) }>{ title }</a></li>
 				<li class="breadcrumb-item active" aria-current="page">Remove art</li>
 			</ol>

@@ -71,3 +71,24 @@ kbd { font-size: .7em; padding: .05rem .3rem; background: var(--bs-secondary-bg)
 .other-matches > summary { cursor: pointer; }
 .cand-row { cursor: pointer; }
 .cand-row:hover > * { background: var(--bs-tertiary-bg); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.1rem; }
+.tile { position: relative; min-width: 0; }
+.tile-art { position: relative; display: block; aspect-ratio: 1; border-radius: .4rem; border: 1px solid var(--bs-border-color); background: var(--bs-secondary-bg); overflow: hidden; }
+.tile-art > i { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; color: var(--bs-secondary-color); }
+.tile-art > img { position: relative; width: 100%; height: 100%; object-fit: cover; }
+.tile-pick { position: absolute; top: .4rem; left: .4rem; z-index: 2; opacity: 0; transition: opacity .1s; background: var(--bs-body-bg); border-radius: .3rem; padding: 0 .25rem; }
+.tile:hover .tile-pick, .tile-pick:focus-within, .tile:has(input:checked) .tile-pick { opacity: 1; }
+.tile:has(input:checked) .tile-art { outline: 3px solid var(--bs-primary); }
+.tile-title a { color: inherit; font-weight: 500; text-decoration: none; }
+.tile-title a:hover { text-decoration: underline; }
+.tile-more { grid-column: 1 / -1; text-align: center; color: var(--bs-secondary-color); font-size: .875rem; }
+.mini-col { width: 2.5rem; }
+.mini-art { width: 2rem; height: 2rem; object-fit: cover; border-radius: .2rem; }
+.library-table .title-link { color: inherit; font-weight: 500; text-decoration: none; }
+.library-table .title-link:hover, .library-table .quiet-link:hover { text-decoration: underline; }
+.library-table .quiet, .library-table .quiet-link { color: var(--bs-secondary-color); text-decoration: none; }
+.filter-chip { font-size: .8rem; background: var(--bs-primary-bg-subtle); border-radius: 999px; padding: .1rem .3rem .1rem .65rem; }
+.filter-chip a { color: var(--bs-secondary-color); }
+.year-input { width: 5rem; }
+.selection-bar { position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%); z-index: 1050; display: flex; align-items: center; gap: .6rem; background: #212529; color: #fff; padding: .5rem 1rem; border-radius: .6rem; box-shadow: 0 6px 24px #0006; }
+.selection-bar[hidden] { display: none; }

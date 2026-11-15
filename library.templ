@@ -1,0 +1,366 @@
+package main
+
+import "strconv"
+
+// libraryView is the Library: Albums or Items, searched and filtered, with
+// an All tab showing both while there is a search.
+templ libraryView(p libraryPage) {
+	@layout("Library", "Library") {
+		<h1 class="h3 mb-3">Library</h1>
+		<nav class="nav nav-underline mb-3" aria-label="What to show">
+			if p.Scoped() {
+				@libraryTab(p, "all", "All", p.Counts[albums]+p.Counts[items])
+			}
+			@libraryTab(p, "albums", "Albums", p.Counts[albums])
+			@libraryTab(p, "items", "Items", p.Counts[items])
+		</nav>
+		@libraryQuery(p)
+		if p.Error != "" {
+			<div class="alert alert-danger" role="alert">{ p.Error }</div>
+		} else {
+			switch p.Show {
+				case "all":
+					@libraryAll(p)
+				case "items":
+					@libraryToolbar(p, items, p.Items.Total)
+					@librarySelection(items) {
+						@itemTable(p.Items, true)
+					}
+				default:
+					@libraryToolbar(p, albums, p.Albums.Total)
+					@librarySelection(albums) {
+						if p.View == "list" {
+							@albumTable(p.Albums, true)
+						} else {
+							@albumGrid(p.Albums, true)
+						}
+					}
+			}
+		}
+		<script src={ assetURL("library.js") }></script>
+	}
+}
+
+templ libraryTab(p libraryPage, show, label string, n int) {
+	if p.Show == show {
+		<a class="nav-link active" aria-current="page" href={ templ.URL(p.ShowURL(show)) }>{ label } <span class="badge text-bg-primary">{ strconv.Itoa(n) }</span></a>
+	} else {
+		<a class="nav-link" href={ templ.URL(p.ShowURL(show)) }>{ label } <span class="badge text-bg-secondary">{ strconv.Itoa(n) }</span></a>
+	}
+}
+
+// libraryQuery is the search: words or a beets query, with the rarer filters
+// behind a button, and each filter in use as a chip that removes it.
+templ libraryQuery(p libraryPage) {
+	{{ chips := p.Chips() }}
+	<form method="get" action="/library" class="mb-2" role="search">
+		if p.Show != "all" {
+			<input type="hidden" name="show" value={ p.Show }/>
+		}
+		if p.Sort != "artist" {
+			<input type="hidden" name="sort" value={ p.Sort }/>
+		}
+		if p.View == "list" {
+			<input type="hidden" name="view" value="list"/>
+		}
+		<div class="d-flex gap-2">
+			<div class="input-group">
+				<span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+				<input class="form-control font-monospace" type="search" name="q" value={ p.Filters.Query } placeholder="Search the Library, or a beets query: artist:Beatles year:1960..1969" aria-label="Search the Library"/>
+			</div>
+			<button type="button" class="btn btn-outline-secondary text-nowrap" data-bs-toggle="collapse" data-bs-target="#library-filters" aria-expanded="false" aria-controls="library-filters">
+				<i class="bi bi-sliders" aria-hidden="true"></i> Filters
+				if len(chips) > 0 {
+					<span class="badge text-bg-primary">{ strconv.Itoa(len(chips)) }</span>
+				}
+			</button>
+			<button class="btn btn-primary">Search</button>
+		</div>
+		<div class="collapse" id="library-filters">
+			<div class="d-flex flex-wrap gap-3 align-items-end pt-2">
+				<div>
+					<label class="form-label small mb-1" for="year_from">Year</label>
+					<div class="input-group input-group-sm">
+						<input class="form-control year-input" id="year_from" name="year_from" inputmode="numeric" placeholder="from" value={ p.Filters.YearFrom }/>
+						<input class="form-control year-input" name="year_to" inputmode="numeric" placeholder="to" aria-label="Year to" value={ p.Filters.YearTo }/>
+					</div>
+				</div>
+				<div>
+					<label class="form-label small mb-1" for="genre">Genre</label>
+					<input class="form-control form-control-sm" id="genre" name="genre" value={ p.Filters.Genre }/>
+				</div>
+				<div>
+					<label class="form-label small mb-1" for="albumtype">Album type</label>
+					<input class="form-control form-control-sm" id="albumtype" name="albumtype" list="albumtypes" value={ p.Filters.AlbumType }/>
+					<datalist id="albumtypes">
+						<option value="album"></option>
+						<option value="single"></option>
+						<option value="ep"></option>
+						<option value="compilation"></option>
+						<option value="live"></option>
+						<option value="soundtrack"></option>
+					</datalist>
+				</div>
+				<div>
+					<label class="form-label small mb-1" for="format">Format</label>
+					<input class="form-control form-control-sm" id="format" name="format" list="formats" value={ p.Filters.Format }/>
+					<datalist id="formats">
+						<option value="FLAC"></option>
+						<option value="MP3"></option>
+						<option value="AAC"></option>
+						<option value="ALAC"></option>
+						<option value="OGG"></option>
+						<option value="Opus"></option>
+					</datalist>
+				</div>
+			</div>
+		</div>
+	</form>
+	if len(chips) > 0 {
+		<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+			for _, c := range chips {
+				<span class="filter-chip">{ c.Label } <a href={ templ.URL(c.Without) } aria-label={ "Remove " + c.Label }><i class="bi bi-x" aria-hidden="true"></i></a></span>
+			}
+			<a class="small" href={ templ.URL(p.ClearFiltersURL()) }>Clear filters</a>
+		</div>
+	}
+}
+
+// libraryToolbar counts what is shown and offers its order, how to show
+// Albums, and, once something narrows them, acting on them all.
+templ libraryToolbar(p libraryPage, k scope, total int) {
+	<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+		<span class="small text-body-secondary">{ count(total, k) }</span>
+		<div class="dropdown">
+			<button class="btn btn-sm btn-link dropdown-toggle text-decoration-none" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-sort-down" aria-hidden="true"></i> { p.SortLabel() }</button>
+			<ul class="dropdown-menu">
+				for _, o := range librarySorts {
+					<li><a class={ "dropdown-item", templ.KV("active", o.Name == p.Sort) } href={ templ.URL(p.SortURL(o.Name)) }>{ o.Label }</a></li>
+				}
+			</ul>
+		</div>
+		<div class="ms-auto d-flex gap-2 align-items-center">
+			if p.Scoped() && total > 0 {
+				@allMenu(p, k, total)
+			}
+			if k == albums {
+				<div class="btn-group btn-group-sm" role="group" aria-label="Show Albums as">
+					<a class={ "btn btn-outline-secondary", templ.KV("active", p.View != "list") } href={ templ.URL(p.ViewURL("grid")) } title="Covers"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i><span class="visually-hidden">Covers</span></a>
+					<a class={ "btn btn-outline-secondary", templ.KV("active", p.View == "list") } href={ templ.URL(p.ViewURL("list")) } title="List"><i class="bi bi-list-ul" aria-hidden="true"></i><span class="visually-hidden">List</span></a>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+// allMenu acts on everything a search or filter matched. It is never shown
+// for the whole Library.
+templ allMenu(p libraryPage, k scope, total int) {
+	<div class="dropdown">
+		<button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">All { count(total, k) }</button>
+		<ul class="dropdown-menu dropdown-menu-end">
+			<li><a class="dropdown-item" href={ templ.URL(modifyAllURL(k, p.Filters.Combined())) }><i class="bi bi-pencil" aria-hidden="true"></i> Modify all { strconv.Itoa(total) }…</a></li>
+			<li>
+				<form method="post" action="/removals">
+					<input type="hidden" name="scope" value={ string(k) }/>
+					<input type="hidden" name="q" value={ p.Filters.Combined() }/>
+					<button class="dropdown-item text-danger"><i class="bi bi-trash" aria-hidden="true"></i> Remove all { strconv.Itoa(total) }…</button>
+				</form>
+			</li>
+		</ul>
+	</div>
+}
+
+// librarySelection holds what can be ticked, and the bar that acts on the
+// ticked ones; library.js shows it once something is ticked.
+templ librarySelection(k scope) {
+	<form id="library-selection" method="get" action="/modify">
+		<input type="hidden" name="scope" value={ string(k) }/>
+		{ children... }
+		<div class="selection-bar" hidden>
+			<strong><span data-selected>0</span> selected</strong>
+			<button class="btn btn-sm btn-light"><i class="bi bi-pencil" aria-hidden="true"></i> Modify…</button>
+			<button class="btn btn-sm btn-outline-light" formaction="/removals" formmethod="post"><i class="bi bi-trash" aria-hidden="true"></i> Remove…</button>
+			<button type="button" class="btn btn-sm btn-link text-white-50" data-clear>Clear</button>
+		</div>
+	</form>
+}
+
+// libraryAll is a search across both: its Albums as covers, then its first Items.
+templ libraryAll(p libraryPage) {
+	<section class="mb-4">
+		<div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
+			<h2 class="h6 mb-0">Albums <span class="text-body-secondary fw-normal">{ strconv.Itoa(p.Albums.Total) }</span></h2>
+			<div class="ms-auto d-flex gap-2 align-items-center">
+				if p.Albums.Total > len(p.Albums.Rows) {
+					<a class="small" href={ templ.URL(p.ShowURL("albums")) }>See all { count(p.Albums.Total, albums) }</a>
+				}
+				if p.Albums.Total > 0 {
+					@allMenu(p, albums, p.Albums.Total)
+				}
+			</div>
+		</div>
+		@albumGrid(p.Albums, false)
+	</section>
+	<section>
+		<div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
+			<h2 class="h6 mb-0">Items <span class="text-body-secondary fw-normal">{ strconv.Itoa(p.Items.Total) }</span></h2>
+			<div class="ms-auto d-flex gap-2 align-items-center">
+				if p.Items.Total > len(p.Items.Rows) {
+					<a class="small" href={ templ.URL(p.ShowURL("items")) }>See all { count(p.Items.Total, items) }</a>
+				}
+				if p.Items.Total > 0 {
+					@allMenu(p, items, p.Items.Total)
+				}
+			</div>
+		</div>
+		@itemTable(p.Items, false)
+	</section>
+}
+
+// libraryMore is the next batch, as htmx asks for it while you scroll.
+templ libraryMore(p libraryPage) {
+	switch  {
+		case p.Show == "items":
+			@itemRows(p.Items, true)
+		case p.View == "list":
+			@albumRows(p.Albums, true)
+		default:
+			@albumTiles(p.Albums, true)
+	}
+}
+
+templ albumGrid(t tableData, pick bool) {
+	if len(t.Rows) == 0 {
+		<p class="text-body-secondary">No Albums match.</p>
+	} else {
+		<div class="tiles">
+			@albumTiles(t, pick)
+		</div>
+	}
+}
+
+// albumTiles are Albums as their covers. Without art, a placeholder shows.
+templ albumTiles(t tableData, pick bool) {
+	for _, a := range t.Rows {
+		<div class="tile">
+			if pick {
+				<label class="tile-pick"><input class="form-check-input" type="checkbox" name="id" value={ strconv.Itoa(a.ID()) } aria-label={ "Select " + orDash(a.Str("album")) }/></label>
+			}
+			<a class="tile-art" href={ templ.URL(recordURL(albums, a.ID())) } tabindex="-1" aria-hidden="true">
+				<i class="bi bi-disc" aria-hidden="true"></i>
+				<img src={ "/albums/" + strconv.Itoa(a.ID()) + "/art" } alt="" loading="lazy" onerror="this.remove()"/>
+			</a>
+			<div class="tile-title text-truncate"><a href={ templ.URL(recordURL(albums, a.ID())) }>{ orDash(a.Str("album")) }</a></div>
+			<div class="small text-body-secondary text-truncate">
+				{ a.Str("albumartist") }
+				if y := yearText(a); y != "" {
+					· { y }
+				}
+			</div>
+		</div>
+	}
+	if t.Next != "" {
+		<div class="tile-more" hx-get={ t.Next } hx-trigger="revealed" hx-swap="outerHTML">Loading more…</div>
+	}
+}
+
+templ albumTable(t tableData, pick bool) {
+	if len(t.Rows) == 0 {
+		<p class="text-body-secondary">No Albums match.</p>
+	} else {
+		<div class="table-responsive">
+			<table class="table table-sm table-hover align-middle library-table">
+				<thead>
+					<tr>
+						if pick {
+							<th class="select-col"><input class="form-check-input" type="checkbox" aria-label="Select all shown" data-select-all/></th>
+						}
+						<th class="mini-col"></th>
+						<th>Album</th>
+						<th>Album artist</th>
+						<th>Year</th>
+						<th>Type</th>
+					</tr>
+				</thead>
+				<tbody>
+					@albumRows(t, pick)
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+templ albumRows(t tableData, pick bool) {
+	for _, a := range t.Rows {
+		<tr>
+			if pick {
+				<td class="select-col"><input class="form-check-input" type="checkbox" name="id" value={ strconv.Itoa(a.ID()) } aria-label="Select"/></td>
+			}
+			<td class="mini-col"><img class="mini-art" src={ "/albums/" + strconv.Itoa(a.ID()) + "/art" } alt="" loading="lazy" onerror="this.style.visibility='hidden'"/></td>
+			<td><a class="title-link" href={ templ.URL(recordURL(albums, a.ID())) }>{ orDash(a.Str("album")) }</a></td>
+			<td class="quiet">{ a.Str("albumartist") }</td>
+			<td>{ yearText(a) }</td>
+			<td class="small text-body-secondary">{ a.Str("albumtype") }</td>
+		</tr>
+	}
+	if t.Next != "" {
+		<tr hx-get={ t.Next } hx-trigger="revealed" hx-swap="outerHTML">
+			<td colspan="6" class="text-center text-body-secondary small">Loading more…</td>
+		</tr>
+	}
+}
+
+templ itemTable(t tableData, pick bool) {
+	if len(t.Rows) == 0 {
+		<p class="text-body-secondary">No Items match.</p>
+	} else {
+		<div class="table-responsive">
+			<table class="table table-sm table-hover align-middle library-table">
+				<thead>
+					<tr>
+						if pick {
+							<th class="select-col"><input class="form-check-input" type="checkbox" aria-label="Select all shown" data-select-all/></th>
+						}
+						<th>Title</th>
+						<th>Artist</th>
+						<th>Album</th>
+						<th class="text-end">#</th>
+						<th class="text-end">Length</th>
+						<th>Year</th>
+					</tr>
+				</thead>
+				<tbody>
+					@itemRows(t, pick)
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+templ itemRows(t tableData, pick bool) {
+	for _, r := range t.Rows {
+		<tr>
+			if pick {
+				<td class="select-col"><input class="form-check-input" type="checkbox" name="id" value={ strconv.Itoa(r.ID()) } aria-label="Select"/></td>
+			}
+			<td><a class="title-link" href={ templ.URL(recordURL(items, r.ID())) }>{ orDash(r.Str("title")) }</a></td>
+			<td class="quiet">{ r.Str("artist") }</td>
+			<td class="quiet">
+				if id := r.Int("album_id"); id != 0 {
+					<a class="quiet-link" href={ templ.URL(recordURL(albums, id)) }>{ orDash(r.Str("album")) }</a>
+				} else {
+					<span class="text-body-secondary">Singleton</span>
+				}
+			</td>
+			<td class="text-end text-body-secondary">{ trackNumber(r) }</td>
+			<td class="text-end">{ duration(r) }</td>
+			<td>{ yearText(r) }</td>
+		</tr>
+	}
+	if t.Next != "" {
+		<tr hx-get={ t.Next } hx-trigger="revealed" hx-swap="outerHTML">
+			<td colspan="7" class="text-center text-body-secondary small">Loading more…</td>
+		</tr>
+	}
+}

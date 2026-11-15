@@ -8,7 +8,7 @@ templ artistsView(p artistsPage) {
 		}
 		if p.Unavailable {
 			<div class="alert alert-warning">
-				This beets-api has no <code>GET /artists</code> yet, so there's no Artist list. Browse <a href="/albums">Albums</a> or <a href="/items">Items</a> instead; Artist pages still work from their links.
+				This beets-api has no <code>GET /artists</code> yet, so there's no Artist list. Browse the <a href="/library">Library</a> instead; Artist pages still work from their links.
 			</div>
 		} else {
 			<input
@@ -90,99 +90,17 @@ templ artistView(p artistPage) {
 	}
 }
 
-templ listView(p listPage) {
-	@layout(p.Scope.Title(), p.Scope.Title()) {
-		@pageHeader(p.Scope.Title(), listSubtitle(p)) {
-		}
-		@filterForm(p)
-		if p.Error != "" {
-			<div class="alert alert-danger" role="alert">{ p.Error }</div>
-		} else {
-			@recordTable(p.Table)
-		}
-	}
-}
-
-func listSubtitle(p listPage) string {
-	if p.Error != "" {
-		return ""
-	}
-	return count(p.Table.Total, p.Scope)
-}
-
-templ filterForm(p listPage) {
-	<form method="get" action={ templ.URL("/" + string(p.Scope)) } class="card card-body mb-3">
-		<div class="row g-2">
-			<div class="col-12">
-				<label class="form-label small mb-1" for="q">beets query</label>
-				<input class="form-control font-monospace" id="q" name="q" value={ p.Filters.Query } placeholder="artist:Beatles year:1960..1969"/>
-			</div>
-			<div class="col-6 col-md-2">
-				<label class="form-label small mb-1" for="year_from">Year from</label>
-				<input class="form-control" id="year_from" name="year_from" inputmode="numeric" value={ p.Filters.YearFrom }/>
-			</div>
-			<div class="col-6 col-md-2">
-				<label class="form-label small mb-1" for="year_to">Year to</label>
-				<input class="form-control" id="year_to" name="year_to" inputmode="numeric" value={ p.Filters.YearTo }/>
-			</div>
-			<div class="col-6 col-md-2">
-				<label class="form-label small mb-1" for="genre">Genre</label>
-				<input class="form-control" id="genre" name="genre" value={ p.Filters.Genre }/>
-			</div>
-			<div class="col-6 col-md-2">
-				<label class="form-label small mb-1" for="albumtype">Album type</label>
-				<input class="form-control" id="albumtype" name="albumtype" list="albumtypes" value={ p.Filters.AlbumType }/>
-				<datalist id="albumtypes">
-					<option value="album"></option>
-					<option value="single"></option>
-					<option value="ep"></option>
-					<option value="compilation"></option>
-					<option value="live"></option>
-					<option value="soundtrack"></option>
-				</datalist>
-			</div>
-			<div class="col-6 col-md-2">
-				<label class="form-label small mb-1" for="format">Format</label>
-				<input class="form-control" id="format" name="format" list="formats" value={ p.Filters.Format }/>
-				<datalist id="formats">
-					<option value="FLAC"></option>
-					<option value="MP3"></option>
-					<option value="AAC"></option>
-					<option value="ALAC"></option>
-					<option value="OGG"></option>
-					<option value="Opus"></option>
-				</datalist>
-			</div>
-			<div class="col-6 col-md-2 d-flex align-items-end">
-				<div class="form-check mb-2">
-					<input class="form-check-input" type="checkbox" id="order" name="order" value="recent" checked?={ p.Filters.Recent }/>
-					<label class="form-check-label" for="order">Recently added</label>
-				</div>
-			</div>
-		</div>
-		<div class="d-flex flex-wrap align-items-center gap-2 mt-3">
-			<button class="btn btn-primary"><i class="bi bi-search" aria-hidden="true"></i> Search</button>
-			<a class="btn btn-outline-secondary" href={ templ.URL("/" + string(p.Scope)) }>Clear</a>
-			if p.Filters.Active() {
-				<span class="small text-body-secondary">Query:</span>
-				<code class="small">{ p.Filters.Combined() }</code>
-				<a class="small" href={ templ.URL(listURL(p.Scope, filters{Query: p.Filters.Combined()}, p.Filters.Recent)) }>edit as query</a>
-			}
-		</div>
-	</form>
-}
-
 // homeView is the home page: a search bar, then the recently added Albums.
 templ homeView(recent []record) {
 	@layout("Search", "Home") {
-		<form method="get" action="/search" role="search" class="home-search mx-auto">
+		<form method="get" action="/library" role="search" class="home-search mx-auto">
 			<input class="form-control form-control-lg font-monospace" type="search" name="q" placeholder="Search the Library" aria-label="Search the Library" autofocus/>
 		</form>
 		if len(recent) > 0 {
 			<section class="home-recent mx-auto mt-5">
 				<div class="d-flex justify-content-between align-items-baseline mb-2">
 					<h2 class="h5">Recently added</h2>
-					<a class="small" href={ templ.URL(listURL(albums, filters{}, true)) }>See all Albums</a>
+					<a class="small" href="/library?sort=recent">See all Albums</a>
 				</div>
 				<div class="row row-cols-3 row-cols-md-4 row-cols-lg-6 g-3">
 					for _, a := range recent {
@@ -196,34 +114,6 @@ templ homeView(recent []record) {
 					}
 				</div>
 			</section>
-		}
-	}
-}
-
-templ searchView(p searchPage) {
-	@layout("Search", "") {
-		@pageHeader("Search", "") {
-		}
-		<form method="get" action="/search" class="mb-3">
-			<div class="input-group">
-				<input class="form-control font-monospace" name="q" value={ p.Query } placeholder="beets query, e.g. love year:1960..1969" aria-label="beets query" autofocus/>
-				<button class="btn btn-primary"><i class="bi bi-search" aria-hidden="true"></i> Search</button>
-			</div>
-		</form>
-		if p.Error != "" {
-			<div class="alert alert-danger" role="alert">{ p.Error }</div>
-		} else if p.Query != "" {
-			for _, k := range []scope{albums, items} {
-				<section class="mb-4">
-					<div class="d-flex justify-content-between align-items-baseline">
-						<h2 class="h4">{ k.Title() } <span class="badge text-bg-secondary">{ strconv.Itoa(p.Tables[k].Total) }</span></h2>
-						if p.Tables[k].Total > len(p.Tables[k].Rows) {
-							<a href={ templ.URL(listURL(k, filters{Query: p.Query}, false)) }>See all { count(p.Tables[k].Total, k) }</a>
-						}
-					</div>
-					@recordTable(p.Tables[k])
-				</section>
-			}
 		}
 	}
 }

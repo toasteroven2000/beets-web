@@ -60,12 +60,12 @@ func TestFiltersCombined(t *testing.T) {
 	}
 }
 
-func TestWithSort(t *testing.T) {
+func TestSortQuery(t *testing.T) {
 	cases := map[string]string{
-		withSort("", albums, false):           "albumartist+ year+ album+",
-		withSort("x", items, true):            "x added-",
-		withSort("x year-", albums, false):    "x year-",
-		withSort("year:2000..", items, false): "year:2000.. artist+ album+ disc+ track+",
+		sortQuery("", albums, "artist"):           "albumartist+ year+ album+",
+		sortQuery("x", items, "recent"):           "x added-",
+		sortQuery("x year-", albums, "artist"):    "x year-",
+		sortQuery("year:2000..", items, "artist"): "year:2000.. artist+ album+ disc+ track+",
 	}
 	for got, want := range cases {
 		if got != want {

@@ -117,7 +117,7 @@ func TestHomeIsOnlyASearchBar(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}
-	mustContain(t, rec, `action="/search"`, `name="q"`)
+	mustContain(t, rec, `action="/library"`, `name="q"`)
 	if n := strings.Count(rec.Body.String(), `name="q"`); n != 1 {
 		t.Errorf("%d search inputs, want 1", n)
 	}
@@ -202,14 +202,19 @@ func TestListCombinesFiltersAndLoadsMore(t *testing.T) {
 			map[string]any{"id": 101, "title": "Song", "artist": "X", "album_id": 0, "length": 61.4},
 		}})
 	}
-	rec := get(t, h, "/items?q=love&year_from=1990&order=recent")
-	mustContain(t, rec, "<code class=\"small\">love year:1990..</code>", "Song", "1:01", "Singleton", `hx-trigger="revealed"`)
-	r, _ := f.last(t, "GET", "/list")
-	if got := r.URL.Query().Get("query"); got != "love year:1990.. added-" {
-		t.Errorf("query %s", got)
+	rec := get(t, h, "/library?show=items&q=love&year_from=1990&sort=recent")
+	mustContain(t, rec, `value="love"`, "year 1990–—", "Song", "1:01", "Singleton", `hx-trigger="revealed"`)
+	var main *http.Request
+	for _, r := range f.requests {
+		if r.URL.Path == "/list" && r.URL.Query().Get("scope") == "item" {
+			main = r
+		}
+	}
+	if main == nil || main.URL.Query().Get("query") != "love year:1990.. added-" {
+		t.Errorf("items asked with %v", main)
 	}
 
-	more := get(t, h, "/items?q=love&offset=100", "HX-Request", "true")
+	more := get(t, h, "/library?show=items&q=love&offset=100", "HX-Request", "true")
 	if strings.Contains(more.Body.String(), "<html") {
 		t.Error("more rows rendered a whole page")
 	}
@@ -221,7 +226,7 @@ func TestBadQueryShowsError(t *testing.T) {
 	f.routes["GET /list"] = func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"detail": "invalid query: oops"})
 	}
-	rec := get(t, h, "/albums?q=year:x")
+	rec := get(t, h, "/library?show=albums&q=year:x")
 	if rec.Code != 400 {
 		t.Errorf("status %d", rec.Code)
 	}
@@ -388,7 +393,7 @@ func TestMissingRecordIs404(t *testing.T) {
 
 func TestIconsAreServed(t *testing.T) {
 	_, h := newTest(t)
-	mustContain(t, get(t, h, "/"), "bootstrap-icons.min.css?v=", `class="bi bi-disc"`)
+	mustContain(t, get(t, h, "/"), "bootstrap-icons.min.css?v=", `class="bi bi-collection"`)
 	if rec := get(t, h, "/public/static/fonts/bootstrap-icons.woff2"); rec.Code != 200 || rec.Body.Len() < 100000 {
 		t.Errorf("font: %d, %d bytes", rec.Code, rec.Body.Len())
 	}
@@ -479,9 +484,9 @@ func TestItemsListKeepsItsColumns(t *testing.T) {
 	f.routes["GET /list"] = func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"total": 1, "limit": 100, "offset": 0, "results": []any{track(1, 2, 3, "T")}})
 	}
-	rec := get(t, h, "/items")
+	rec := get(t, h, "/library?show=items")
 	// Away from an Album the number stays where it was, with the disc in it.
-	mustContain(t, rec, "<th>Album</th>", `<td class="text-end">2-3</td>`)
+	mustContain(t, rec, "<th>Album</th>", `<td class="text-end text-body-secondary">2-3</td>`)
 	if strings.Contains(rec.Body.String(), "track-col") || strings.Contains(rec.Body.String(), "Disc 2") {
 		t.Error("the Items list is laid out like an Album's tracks")
 	}

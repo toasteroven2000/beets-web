@@ -3,7 +3,7 @@ package main
 import "strconv"
 
 templ modifyView(p modifyPage) {
-	@layout("Modify "+p.Scope.Title(), p.Scope.Title()) {
+	@layout("Modify "+p.Scope.Title(), "Library") {
 		@pageHeader("Modify "+count(p.Count, p.Scope), "") {
 		}
 		<p>

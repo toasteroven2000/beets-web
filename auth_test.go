@@ -11,7 +11,7 @@ const anon = "X-Test-Anonymous"
 
 func TestRequestsWithoutTheActorHeaderAreRefusedAndTouchNothing(t *testing.T) {
 	f, h := newTest(t)
-	for _, path := range []string{"/", "/albums", "/audit", "/profile", "/imports/7", "/public/static/app.css"} {
+	for _, path := range []string{"/", "/library", "/audit", "/profile", "/imports/7", "/public/static/app.css"} {
 		rec := get(t, h, path, anon, "1")
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("GET %s: %d", path, rec.Code)
@@ -81,7 +81,7 @@ func TestTheActorHeaderCanBeAnotherOne(t *testing.T) {
 	}
 	rec := get(t, h, "/profile", "Remote-User", "alex", "Remote-Email", "alex@example.com")
 	mustContain(t, rec, "<strong>alex@example.com</strong>", "<code>Remote-Email</code>")
-	get(t, h, "/albums", "Remote-Email", "alex@example.com")
+	get(t, h, "/library", "Remote-Email", "alex@example.com")
 	if r, _ := f.last(t, "GET", "/list"); r.Header.Get("X-Beets-API-Actor") != "alex@example.com" {
 		t.Errorf("actor %q", r.Header.Get("X-Beets-API-Actor"))
 	}
@@ -96,7 +96,7 @@ func TestOverlongActorIsRefused(t *testing.T) {
 
 func TestNavbarHasThePersonsMenuWithProfileModificationsAndAudit(t *testing.T) {
 	_, h := newTest(t)
-	rec := get(t, h, "/albums", "Remote-User", "alex", "Remote-Name", "Alex Rivera")
+	rec := get(t, h, "/library", "Remote-User", "alex", "Remote-Name", "Alex Rivera")
 	mustContain(t, rec, "Alex Rivera",
 		`<a class="dropdown-item" href="/profile">`, `<a class="dropdown-item" href="/modifications">`, `<a class="dropdown-item" href="/audit">`)
 	for _, gone := range []string{`<a class="nav-link" href="/audit"`, `<a class="nav-link" href="/modifications"`, "href=\"/audit\" class=\"nav-link"} {
@@ -105,7 +105,7 @@ func TestNavbarHasThePersonsMenuWithProfileModificationsAndAudit(t *testing.T) {
 		}
 	}
 	// Without a full name, the username.
-	mustContain(t, get(t, h, "/albums", "Remote-User", "alex"), "</i> alex</a>")
+	mustContain(t, get(t, h, "/library", "Remote-User", "alex"), "</i> alex</a>")
 }
 
 func TestMenuIsHighlightedOnItsPages(t *testing.T) {
@@ -121,7 +121,7 @@ func TestMenuIsHighlightedOnItsPages(t *testing.T) {
 		rec := get(t, h, path)
 		mustContain(t, rec, want, `class="nav-link dropdown-toggle active"`)
 	}
-	if strings.Contains(get(t, h, "/albums").Body.String(), "dropdown-toggle active") {
+	if strings.Contains(get(t, h, "/library").Body.String(), "dropdown-toggle active") {
 		t.Error("menu highlighted on Albums")
 	}
 }

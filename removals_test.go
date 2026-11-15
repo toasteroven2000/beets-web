@@ -151,13 +151,13 @@ func TestListsAndRecordsOfferRemove(t *testing.T) {
 	f.routes["GET /list"] = func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"total": 1, "limit": 100, "offset": 0, "results": []any{map[string]any{"id": 1, "album": "Back in Black", "albumartist": "AC/DC", "year": 1980}}})
 	}
-	rec := get(t, h, "/albums?q=artist:AC/DC")
-	mustContain(t, rec, `formaction="/removals" formmethod="post"`, "Remove selected", `id="remove-all-albums"`, `form="remove-all-albums"`, "Remove all 1 Album")
-	// With no query "all" would be the whole Library, which beets-api refuses: don't offer it.
-	rec = get(t, h, "/albums")
-	mustContain(t, rec, "Remove selected")
-	if strings.Contains(rec.Body.String(), "remove-all-albums") {
-		t.Error("offers to remove the whole Library")
+	rec := get(t, h, "/library?show=albums&q=artist:AC/DC")
+	mustContain(t, rec, `formaction="/removals" formmethod="post"`, "Remove…", "Remove all 1…", `name="q" value="artist:AC/DC"`)
+	// With no search, "all" would be the whole Library: neither Modify all nor Remove all is offered.
+	rec = get(t, h, "/library")
+	mustContain(t, rec, `formaction="/removals" formmethod="post"`)
+	if strings.Contains(rec.Body.String(), "Remove all") || strings.Contains(rec.Body.String(), "Modify all") {
+		t.Error("offers to change the whole Library")
 	}
 
 	f.routes["GET /albums/2"] = func(w http.ResponseWriter, r *http.Request) {

@@ -6,10 +6,10 @@ import "strconv"
 // the page beside it shows its tracks, details, fields or art.
 templ albumView(p recordPage) {
 	{{ id := strconv.Itoa(p.Record.ID()) }}
-	@layout(recordTitle(p), "Albums") {
+	@layout(recordTitle(p), "Library") {
 		<nav aria-label="breadcrumb">
 			<ol class="breadcrumb">
-				<li class="breadcrumb-item"><a href="/albums">Albums</a></li>
+				<li class="breadcrumb-item"><a href="/library">Library</a></li>
 				<li class="breadcrumb-item active" aria-current="page">{ recordTitle(p) }</li>
 			</ol>
 		</nav>

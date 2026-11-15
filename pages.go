@@ -86,19 +86,6 @@ type artistPage struct {
 	Table   tableData
 }
 
-type listPage struct {
-	Scope   scope
-	Filters filters
-	Table   tableData
-	Error   string
-}
-
-type searchPage struct {
-	Query  string
-	Tables map[scope]tableData
-	Error  string
-}
-
 type recordPage struct {
 	Scope      scope
 	Tab        string // an Album page's tab: "items", "fields" or "art"
@@ -331,28 +318,6 @@ func capped(entries []previewEntry) []previewEntry {
 		return entries[:previewLimit]
 	}
 	return entries
-}
-
-func listURL(k scope, f filters, recent bool) string {
-	v := url.Values{}
-	set := func(k, val string) {
-		if val != "" {
-			v.Set(k, val)
-		}
-	}
-	set("q", f.Query)
-	set("year_from", f.YearFrom)
-	set("year_to", f.YearTo)
-	set("genre", f.Genre)
-	set("albumtype", f.AlbumType)
-	set("format", f.Format)
-	if recent {
-		v.Set("order", "recent")
-	}
-	if len(v) == 0 {
-		return "/" + string(k)
-	}
-	return "/" + string(k) + "?" + v.Encode()
 }
 
 func pathText(v any) string { return valueString(v) }

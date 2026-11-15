@@ -160,11 +160,11 @@ func TestAChangeThatOnlyAddsTextHasNoSpaceInsideTheValue(t *testing.T) {
 
 func TestNavHasNoArtistsLink(t *testing.T) {
 	_, h := newTest(t)
-	rec := get(t, h, "/albums")
+	rec := get(t, h, "/library")
 	if strings.Contains(rec.Body.String(), `href="/artists"`) {
 		t.Error("the nav still links to Artists")
 	}
-	mustContain(t, rec, `href="/albums"`, `href="/items"`, `href="/import"`)
+	mustContain(t, rec, `href="/library"`, `href="/import"`)
 }
 
 func TestAuditEntryThatDoesNotExistIs404(t *testing.T) {
