@@ -37,6 +37,7 @@ templ layout(title string, active string) {
 								<a class={ "nav-link dropdown-toggle", templ.KV("active", userMenuActive(active)) } href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-person-circle" aria-hidden="true"></i> { who.DisplayName() }</a>
 								<ul class="dropdown-menu dropdown-menu-end">
 									@menuLink("/profile", "person-vcard", "Profile", active)
+									@menuLink("/config", "sliders", "Config", active)
 									@menuLink("/modifications", "pencil-square", "Modifications", active)
 									@menuLink("/removals", "trash", "Removals", active)
 									@menuLink("/trash", "recycle", "Trash", active)
@@ -82,7 +83,7 @@ templ navLink(href, iconName, label, active string) {
 
 // userMenuActive tells whether the page is one the person's menu holds.
 func userMenuActive(active string) bool {
-	return active == "Profile" || active == "Modifications" || active == "Removals" || active == "Trash" || active == "Audit"
+	return active == "Profile" || active == "Config" || active == "Modifications" || active == "Removals" || active == "Trash" || active == "Audit"
 }
 
 templ menuLink(href, iconName, label, active string) {

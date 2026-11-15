@@ -65,6 +65,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /audit", s.handleAudit)
 	mux.HandleFunc("GET /audit/{id}", s.handleAuditEntry)
 	mux.HandleFunc("GET /profile", s.handleProfile)
+	mux.HandleFunc("GET /config", s.handleConfig)
 	mux.HandleFunc("GET /modifications/{id}", s.handleModification)
 	mux.HandleFunc("POST /modifications/{id}/confirm", s.handleConfirm)
 	mux.HandleFunc("POST /modifications/{id}/again", s.handleAgain)

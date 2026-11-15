@@ -149,6 +149,23 @@ func TestProfileShowsTheIdentityHeadersAndTheRecordedActor(t *testing.T) {
 	}
 }
 
+func TestConfigPageListsBeetsConfigFromTheMenu(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["GET /config"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{
+			"import":    map[string]any{"copy": true, "languages": []any{"en", "fr"}},
+			"plugins":   []any{"fetchart", "lyrics"},
+			"acoustid":  map[string]any{"apikey": "REDACTED"},
+			"directory": "/music",
+		})
+	}
+	rec := get(t, h, "/config", "Remote-User", "alex")
+	mustContain(t, rec, "import.copy", "true", "import.languages", "en; fr", "plugins", "fetchart; lyrics",
+		"acoustid.apikey", "REDACTED", "directory", "/music",
+		`class="dropdown-item active" aria-current="page" href="/config"`, `class="nav-link dropdown-toggle active"`)
+	mustContain(t, get(t, h, "/profile", "Remote-User", "alex"), `href="/config"`)
+}
+
 func TestAuditShowsActorsAndFiltersByThem(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /audit"] = func(w http.ResponseWriter, r *http.Request) {
