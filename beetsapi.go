@@ -488,6 +488,10 @@ type importPrompt struct {
 	Recommendation string            `json:"recommendation"`
 	Candidates     []candidate       `json:"candidates"`
 	Existing       []record          `json:"existing"`
+	// Known are what the Library already has under the names this prompt could
+	// lead to, by artist and name: beets only says a match is a duplicate after
+	// it is chosen, so the page looks ahead. Not from beets-api.
+	Known map[string][]record `json:"-"`
 }
 
 // importChoice is a Choice already made, with the prompt it answered.

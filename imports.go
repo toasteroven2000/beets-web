@@ -677,6 +677,9 @@ func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if pr := op.Result.Prompt; pr != nil && op.Status == "waiting_for_choice" {
+		s.markDuplicates(r.Context(), pr)
+	}
 	render(w, http.StatusOK, importView(pg))
 }
 
