@@ -1,0 +1,9 @@
+.git
+.github
+.devenv*
+.direnv
+.scratch
+.claude
+beets-web
+*_templ.go
+todo.md

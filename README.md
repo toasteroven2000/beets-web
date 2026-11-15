@@ -19,9 +19,13 @@ Without devenv: `go generate ./... && go run . -api http://127.0.0.1:8338`.
 
 | Flag      | Default                 | Meaning                                         |
 | --------- | ----------------------- | ----------------------------------------------- |
-| `-listen` | `127.0.0.1:8339`        | Listen address. Reach it only through the proxy that signs people in. |
-| `-api`    | `http://127.0.0.1:8338` | beets-api base URL                              |
+| `-listen` (`BEETS_WEB_LISTEN`) | `127.0.0.1:8339` | Listen address. Reach it only through the proxy that signs people in. |
+| `-api` (`BEETS_WEB_API`) | `http://127.0.0.1:8338` | beets-api base URL                              |
 | `-actor-header` (`BEETS_WEB_ACTOR_HEADER`) | `Remote-User` | The request header that names the person making it, which beets-api records as the Actor. A request without it gets a 401. |
+
+## Container image
+
+The `Dockerfile` builds a static binary and puts it on distroless static, running as non-root. `.github/workflows/image.yml` tests the code, then builds the image for `linux/amd64`, tagged `latest` and `sha-<commit>`; pushes to `main` publish it to `ghcr.io/toasteroven2000/beets-web`, and pull requests only build it. It listens on `:8339` (`BEETS_WEB_LISTEN`), and needs `BEETS_WEB_API=http://…` to find beets-api. Build it locally with `docker build -t beets-web .`.
 
 ## Layout
 

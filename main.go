@@ -17,8 +17,8 @@ func envOr(name, fallback string) string {
 }
 
 func main() {
-	listen := flag.String("listen", "127.0.0.1:8339", "listen address; keep it reachable only through the proxy that signs people in")
-	api := flag.String("api", "http://127.0.0.1:8338", "beets-api base URL")
+	listen := flag.String("listen", envOr("BEETS_WEB_LISTEN", "127.0.0.1:8339"), "listen address; keep it reachable only through the proxy that signs people in (env BEETS_WEB_LISTEN)")
+	api := flag.String("api", envOr("BEETS_WEB_API", "http://127.0.0.1:8338"), "beets-api base URL (env BEETS_WEB_API)")
 	actorHeader := flag.String("actor-header", envOr("BEETS_WEB_ACTOR_HEADER", defaultActorHeader),
 		"request header the proxy puts the person's name in; requests without it are refused (env BEETS_WEB_ACTOR_HEADER)")
 	flag.Parse()
