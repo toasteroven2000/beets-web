@@ -300,7 +300,7 @@ templ importNow(pg importPage) {
 			</div>
 		case "waiting_for_choice":
 			if pr := op.Result.Prompt; pr != nil {
-				@importPromptView(string(op.ID), *pr, pg.NoSources, pg.Mode)
+				@importPromptView(pg, *pr)
 			}
 		case "failed":
 			<div class="alert alert-danger">The Import failed: { orDash(op.Result.Error) }</div>
@@ -437,8 +437,13 @@ templ importPaths(pg importPage) {
 	</table>
 }
 
-templ importPromptView(id string, p importPrompt, noSources bool, mode importMode) {
-	<p class="mb-1">
+// importPromptView is what beets asks about one Task. For a match it leads with
+// what applying the best Candidate would do, worst first, with every action in
+// one row and a key for each; the other Candidates are a table beneath.
+templ importPromptView(pg importPage, p importPrompt) {
+	{{ id := string(pg.Op.ID) }}
+	@promptForms(id, p)
+	<div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
 		switch p.Kind {
 			case "duplicate":
 				<strong>Already in the Library.</strong>
@@ -447,67 +452,196 @@ templ importPromptView(id string, p importPrompt, noSources bool, mode importMod
 			default:
 				<strong>Match this Album.</strong>
 		}
-		if len(p.Current) > 0 {
-			<span class="text-body-secondary">Tagged now as</span>
-			if p.Kind == "item" {
-				{ orDash(p.Current["artist"]) } – { orDash(p.Current["title"]) }
-			} else {
-				{ orDash(p.Current["artist"]) } – { orDash(p.Current["album"]) }
+		<span class="font-monospace text-break"><i class="bi bi-folder2" aria-hidden="true"></i> { pg.folderOf(p.Paths) }</span>
+		if len(p.Current) > 0 && p.Kind != "duplicate" {
+			{{ artist, name := p.currentNames() }}
+			<span class="small text-body-secondary">tagged { orDash(artist) } – { orDash(name) }</span>
+			if d := p.Duplicates(artist, name); len(d) > 0 {
+				<span class="badge text-bg-warning fw-normal">
+					<i class="bi bi-copy" aria-hidden="true"></i> Already in your Library:
+					@duplicateLinks(p, d)
+				</span>
 			}
 		}
 		if p.Recommendation != "" {
-			<span class="badge text-bg-light border ms-1">beets' confidence: { p.Recommendation }</span>
+			<span class="badge text-bg-light border fw-normal">beets' confidence: { p.Recommendation }</span>
 		}
-	</p>
-	{{ artist, name := p.currentNames() }}
-	if d := p.Duplicates(artist, name); len(d) > 0 {
-		<div class="alert alert-warning py-2 mb-3">
-			<i class="bi bi-copy" aria-hidden="true"></i>
-			<strong>Already in your Library:</strong>
-			@duplicateLinks(p, d)
-			<div class="small">Using these tags as they are, or applying a match with the same artist and name, makes beets ask what to do about the duplicate.</div>
+	</div>
+	if p.Kind == "duplicate" {
+		@duplicateChoices(id, p)
+	} else if len(p.Candidates) == 0 {
+		@noMatchPrompt(pg, p)
+	} else {
+		@bestMatch(pg, p)
+		if len(p.Candidates) > 1 {
+			@otherMatches(p)
+		}
+		@promptKeys(p)
+	}
+	<script src={ assetURL("importkeys.js") }></script>
+}
+
+// promptForms are what the action buttons submit, wherever on the page they are.
+templ promptForms(id string, p importPrompt) {
+	for _, c := range p.Candidates {
+		<form id={ applyFormID(c) } method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } hidden>
+			<input type="hidden" name="prompt_id" value={ p.ID }/>
+			<input type="hidden" name="candidate" value={ strconv.Itoa(c.Index) }/>
+		</form>
+	}
+	<form id="choose" method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } hidden>
+		<input type="hidden" name="prompt_id" value={ p.ID }/>
+	</form>
+}
+
+// bestMatch is the best Candidate, what applying it would do, and every action.
+templ bestMatch(pg importPage, p importPrompt) {
+	{{ c := p.Candidates[0] }}
+	{{ v := verdictOf(p, c) }}
+	<div class="card border-primary mb-3 candidate">
+		<div class="card-body">
+			<div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
+				<span class="small text-body-secondary">Best match</span>
+				<span class={ "badge", matchClass(c) }>{ matchPercent(c) }</span>
+				<h2 class="h5 mb-0">{ candidateName(c) }</h2>
+				<span class="text-body-secondary">{ candidateSummary(c) }</span>
+				@sourceLink(c)
+			</div>
+			<ul class="list-unstyled mb-3 verdict">
+				@verdictLines(p, v, true)
+			</ul>
+			<div class="d-flex flex-wrap align-items-center gap-2">
+				<button form={ applyFormID(c) } class="btn btn-primary" name="action" value="apply" data-key="a"><i class="bi bi-check-lg" aria-hidden="true"></i> Apply <kbd>A</kbd></button>
+				@otherActions(p)
+				@searchToggle(p, false)
+				if pg.Mode.Text != "" {
+					<span class={ "small ms-auto", templ.KV("text-warning-emphasis", pg.Mode.Warn), templ.KV("text-body-secondary", !pg.Mode.Warn) } title="beets' import config">
+						<i class="bi bi-files" aria-hidden="true"></i> { pg.Mode.Text }
+					</span>
+				}
+			</div>
+			@searchForm(string(pg.Op.ID), p, false)
+			<details class="mt-3">
+				<summary class="small text-body-secondary">Every field and track</summary>
+				@candidateDetails(p, c)
+			</details>
+		</div>
+	</div>
+}
+
+// verdictLines say what applying a Candidate would do: what could go wrong,
+// then what is simply done, then what is safe. For the best match the renames
+// and filled-in fields are shown open (best), as that is the one most applied.
+templ verdictLines(p importPrompt, v verdict, best bool) {
+	if len(v.Duplicates) > 0 {
+		<li class="text-danger-emphasis">
+			<i class="bi bi-copy me-2" aria-hidden="true"></i>
+			Your Library already has this release as
+			@duplicateLinks(p, v.Duplicates)
+			— beets will ask whether to skip it, keep both, remove the old one or merge them.
+		</li>
+	}
+	if len(v.Unmatched) > 0 {
+		<li class="text-danger-emphasis">
+			<i class="bi bi-x-octagon me-2" aria-hidden="true"></i>
+			<details class="d-inline">
+				<summary>{ strconv.Itoa(len(v.Unmatched)) } of your { strconv.Itoa(v.Files) } files match no track on this release.</summary>
+				<div class="small font-monospace mt-1">
+					for _, f := range v.Unmatched {
+						<div>{ f }</div>
+					}
+				</div>
+			</details>
+		</li>
+	}
+	if len(v.Missing) > 0 {
+		<li class="text-warning-emphasis">
+			<i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>
+			<details class="d-inline">
+				<summary>This release has { plural(len(v.Missing), "track", "tracks") } your files don't.</summary>
+				<div class="small mt-1">{ strings.Join(v.Missing, " · ") }</div>
+			</details>
+		</li>
+	}
+	for _, f := range v.Overwrites {
+		<li class="text-warning-emphasis"><i class="bi bi-arrow-left-right me-2" aria-hidden="true"></i>Changes { strings.ToLower(f.Label) } @delta(f.Old, f.New)</li>
+	}
+	if len(v.Renames) > 0 {
+		<li>
+			<i class="bi bi-pencil me-2" aria-hidden="true"></i>
+			<details class="d-inline" open?={ best }>
+				<summary>Renames { strconv.Itoa(len(v.Renames)) } of { plural(v.Tracks(), "track", "tracks") }</summary>
+				<div class="small mt-1">
+					for _, r := range v.Renames {
+						<div><span class="text-body-secondary font-monospace me-2">{ r.NewNum }</span>@delta(r.OldTitle, r.NewTitle)</div>
+					}
+				</div>
+			</details>
+		</li>
+	}
+	if v.Renumbers > 0 {
+		<li><i class="bi bi-list-ol me-2" aria-hidden="true"></i>Renumbers { plural(v.Renumbers, "track", "tracks") }</li>
+	}
+	if len(v.Fills) > 0 {
+		<li>
+			<i class="bi bi-plus-circle me-2" aria-hidden="true"></i>
+			<details class="d-inline" open?={ best }>
+				<summary>Fills in { plural(len(v.Fills), "empty field", "empty fields") }</summary>
+				<div class="small mt-1">
+					for i, f := range v.Fills {
+						if i > 0 {
+							·
+						}
+						{ strings.ToLower(f.Label) }: <ins>{ f.New }</ins>
+					}
+				</div>
+			</details>
+		</li>
+	}
+	if v.AllMatch() {
+		<li class="text-success-emphasis"><i class="bi bi-check-circle me-2" aria-hidden="true"></i>All { strconv.Itoa(v.Files) } files match a track.</li>
+	}
+	if k := v.Keeps(); k != "" {
+		<li class="text-success-emphasis"><i class="bi bi-shield-check me-2" aria-hidden="true"></i>{ k }</li>
+	}
+}
+
+// otherActions are what to do without a match: Use as-is and Skip, each with a
+// key, and the rarer ones under More.
+templ otherActions(p importPrompt) {
+	if hasChoice(p, "asis") {
+		<button form="choose" class="btn btn-outline-secondary" name="action" value="asis" data-key="u" title={ choiceHelp("asis") }>{ choiceLabel("asis") } <kbd>U</kbd></button>
+	}
+	if hasChoice(p, "skip") {
+		<button form="choose" class="btn btn-outline-secondary" name="action" value="skip" data-key="s" title={ choiceHelp("skip") }>{ choiceLabel("skip") } <kbd>S</kbd></button>
+	}
+	if more := moreChoices(p); len(more) > 0 {
+		<div class="btn-group">
+			<button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">More</button>
+			<ul class="dropdown-menu">
+				for _, c := range more {
+					<li><button form="choose" class="dropdown-item" name="action" value={ c } title={ choiceHelp(c) }>{ choiceLabel(c) }</button></li>
+				}
+			</ul>
 		</div>
 	}
-	if len(p.Candidates) > 1 {
-		<p class="small text-body-secondary mb-3">{ strconv.Itoa(len(p.Candidates)) } Candidates, best first.</p>
-	}
-	if p.Kind == "duplicate" {
-		<ul class="mb-3">
-			for _, r := range p.Existing {
-				<li><a href={ templ.URL(recordURL(existingScope(p), r.ID())) }>{ existingName(r) }</a></li>
-			}
-		</ul>
-	}
-	for i, c := range p.Candidates {
-		@candidateCard(id, p, c, i == 0, mode)
-	}
-	if len(p.Candidates) == 0 && p.Kind != "duplicate" {
-		if noSources {
-			@noSourcesWarning()
-		} else {
-			<p class="text-body-secondary">No Candidates found. Search, or import the files as they are.</p>
-		}
-	}
-	<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="d-flex flex-wrap align-items-center gap-2 mb-3">
-		<input type="hidden" name="prompt_id" value={ p.ID }/>
-		if len(p.Candidates) > 0 {
-			<span class="small text-body-secondary">Or:</span>
-		}
-		for _, c := range promptButtons(p) {
-			<button class={ "btn btn-sm", templ.KV("btn-outline-danger", c == "remove"), templ.KV("btn-outline-secondary", c != "remove") } name="action" value={ c } title={ choiceHelp(c) }>{ choiceLabel(c) }</button>
-		}
-	</form>
-	if p.Kind == "duplicate" {
-		<ul class="small text-body-secondary">
-			for _, c := range promptButtons(p) {
-				<li><strong>{ choiceLabel(c) }:</strong> { choiceHelp(c) }</li>
-			}
-		</ul>
-	}
+}
+
+templ searchToggle(p importPrompt, primary bool) {
 	if hasChoice(p, "search") {
-		<details open?={ len(p.Candidates) == 0 }>
-			<summary class="small"><i class="bi bi-search" aria-hidden="true"></i> Search again</summary>
-			<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="row g-2 align-items-end mt-1">
+		if primary {
+			<button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#import-search" data-key="/"><i class="bi bi-search" aria-hidden="true"></i> Search <kbd>/</kbd></button>
+		} else {
+			<button type="button" class="btn btn-link btn-sm" data-bs-toggle="collapse" data-bs-target="#import-search" data-key="/"><i class="bi bi-search" aria-hidden="true"></i> Search again <kbd>/</kbd></button>
+		}
+	}
+}
+
+// searchForm asks beets to look again, by artist and name or by ids.
+templ searchForm(id string, p importPrompt, open bool) {
+	if hasChoice(p, "search") {
+		<div class={ "collapse", templ.KV("show", open) } id="import-search">
+			<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="row g-2 align-items-end pt-3">
 				<input type="hidden" name="prompt_id" value={ p.ID }/>
 				<input type="hidden" name="action" value="search"/>
 				<div class="col-sm-3">
@@ -528,11 +662,152 @@ templ importPromptView(id string, p importPrompt, noSources bool, mode importMod
 					<input class="form-control form-control-sm font-monospace" id="search-ids" name="search_ids" placeholder="MusicBrainz or other ids"/>
 				</div>
 				<div class="col-auto">
-					<button class="btn btn-sm btn-outline-primary"><i class="bi bi-search" aria-hidden="true"></i> Search again</button>
+					<button class="btn btn-sm btn-outline-primary"><i class="bi bi-search" aria-hidden="true"></i> Search</button>
 				</div>
 			</form>
-		</details>
+		</div>
 	}
+}
+
+// otherMatches are the Candidates after the best, one row each with what
+// tells releases apart and what applying would do; a row opens to its verdict.
+// The table is open from the start, and can be folded away.
+templ otherMatches(p importPrompt) {
+	{{ rest := p.Candidates[1:] }}
+	<details class="mb-3 other-matches" open>
+		<summary class="fw-medium">
+			{ plural(len(rest), "other match", "other matches") }
+			<span class="small fw-normal text-body-secondary">— { matchPercent(rest[0]) } and below</span>
+		</summary>
+		<div class="table-responsive mt-2">
+			<table class="table table-sm align-middle other-table">
+				<thead>
+					<tr>
+						<th>Match</th>
+						<th>Year</th>
+						<th>Label</th>
+						<th>Country</th>
+						<th>Media</th>
+						if p.Kind != "item" {
+							<th>Your files</th>
+							<th>Renames</th>
+						}
+						<th>Overwrites</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, c := range rest {
+						{{ v := verdictOf(p, c) }}
+						<tr class="cand-row" data-bs-toggle="collapse" data-bs-target={ "#match-" + strconv.Itoa(c.Index) } aria-expanded="false">
+							<td><span class={ "badge", matchClass(c) }>{ matchPercent(c) }</span></td>
+							<td>{ valueString(c.Year) }</td>
+							<td>{ orDash(candidateFact(c, "Label")) }</td>
+							<td>{ orDash(candidateFact(c, "Country")) }</td>
+							<td>{ orDash(candidateFact(c, "Media")) }</td>
+							if p.Kind != "item" {
+								<td class="small text-nowrap">
+									if len(v.Unmatched) > 0 {
+										<span class="text-danger-emphasis"><i class="bi bi-x-octagon" aria-hidden="true"></i> { strconv.Itoa(v.Tracks()) } of { strconv.Itoa(v.Files) }</span>
+									} else {
+										<span class="text-success-emphasis"><i class="bi bi-check" aria-hidden="true"></i> { strconv.Itoa(v.Files) }</span>
+									}
+									if len(v.Missing) > 0 {
+										<span class="text-warning-emphasis ms-1">+{ strconv.Itoa(len(v.Missing)) } missing</span>
+									}
+								</td>
+								<td class="small">
+									if len(v.Renames) > 0 {
+										{ strconv.Itoa(len(v.Renames)) }
+									} else {
+										—
+									}
+								</td>
+							}
+							<td class="small text-warning-emphasis">{ orDash(v.OverwritesText()) }</td>
+							<td class="text-end text-nowrap">
+								<button form={ applyFormID(c) } class="btn btn-sm btn-outline-primary" name="action" value="apply" onclick="event.stopPropagation()">Apply</button>
+							</td>
+						</tr>
+						<tr class="collapse" id={ "match-" + strconv.Itoa(c.Index) }>
+							<td colspan="9" class="bg-body-tertiary">
+								<div class="d-flex flex-wrap align-items-baseline gap-2 mb-1">
+									<strong>{ candidateName(c) }</strong>
+									@sourceLink(c)
+								</div>
+								<ul class="list-unstyled small mb-1 verdict">
+									@verdictLines(p, v, false)
+								</ul>
+								<details>
+									<summary class="small text-body-secondary">Every field and track</summary>
+									@candidateDetails(p, c)
+								</details>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<div class="small text-body-secondary">Click a row for what applying it does.</div>
+	</details>
+}
+
+// noMatchPrompt is a prompt with no Candidates: search, or import as they are.
+templ noMatchPrompt(pg importPage, p importPrompt) {
+	<div class="card mb-3">
+		<div class="card-body">
+			if pg.NoSources {
+				@noSourcesWarning()
+			} else {
+				<p class="mb-2">No release found for these files. Search, or import them as they are.</p>
+			}
+			<div class="d-flex flex-wrap align-items-center gap-2">
+				@searchToggle(p, true)
+				@otherActions(p)
+			</div>
+			@searchForm(string(pg.Op.ID), p, true)
+		</div>
+	</div>
+	@promptKeys(p)
+}
+
+// duplicateChoices asks what to do about records the Library already has.
+templ duplicateChoices(id string, p importPrompt) {
+	<ul class="mb-3">
+		for _, r := range p.Existing {
+			<li><a href={ templ.URL(recordURL(existingScope(p), r.ID())) }>{ existingName(r) }</a></li>
+		}
+	</ul>
+	<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") } class="d-flex flex-wrap align-items-center gap-2 mb-3">
+		<input type="hidden" name="prompt_id" value={ p.ID }/>
+		for _, c := range promptButtons(p) {
+			<button class={ "btn btn-sm", templ.KV("btn-outline-danger", c == "remove"), templ.KV("btn-outline-secondary", c != "remove") } name="action" value={ c } title={ choiceHelp(c) }>{ choiceLabel(c) }</button>
+		}
+	</form>
+	<ul class="small text-body-secondary">
+		for _, c := range promptButtons(p) {
+			<li><strong>{ choiceLabel(c) }:</strong> { choiceHelp(c) }</li>
+		}
+	</ul>
+}
+
+// promptKeys says which keys do what on this prompt.
+templ promptKeys(p importPrompt) {
+	<div class="small text-body-secondary">
+		<i class="bi bi-keyboard" aria-hidden="true"></i>
+		if len(p.Candidates) > 0 {
+			<kbd>A</kbd> apply the best
+		}
+		if hasChoice(p, "asis") {
+			· <kbd>U</kbd> use as-is
+		}
+		if hasChoice(p, "skip") {
+			· <kbd>S</kbd> skip
+		}
+		if hasChoice(p, "search") {
+			· <kbd>/</kbd> search
+		}
+	</div>
 }
 
 // duplicateLinks names what the Library already has, each linked.
@@ -545,136 +820,107 @@ templ duplicateLinks(p importPrompt, found []record) {
 	}
 }
 
-// candidateCard shows one Candidate as the files would be once applied: every
-// album property and every track, with old → new only where Apply changes it.
-// The best Candidate says what happens to the files beside its Apply button.
-templ candidateCard(id string, p importPrompt, c candidate, best bool, mode importMode) {
+// candidateDetails is everything a Candidate sets: every field beside what the
+// files say now, each file beside the track it becomes, and the bookkeeping
+// fields. It is folded away under the verdict.
+templ candidateDetails(p importPrompt, c candidate) {
 	{{ facts := candidateFacts(c) }}
-	<div class={ "card mb-3 candidate", templ.KV("border-primary", best) }>
-		<div class="card-body">
-			<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-				<span class={ "badge", matchClass(c) }>{ matchPercent(c) }</span>
-				<h2 class="h5 mb-0">{ candidateName(c) }</h2>
-				if y := valueString(c.Year); y != "" && y != "0" {
-					<span class="text-body-secondary">{ y }</span>
-				}
-				@sourceLink(c)
-				if d := p.Duplicates(c.Artist, c.duplicateName()); len(d) > 0 {
-					<span class="badge text-bg-warning fw-normal" title="Applying this makes beets ask what to do about the duplicate">
-						<i class="bi bi-copy" aria-hidden="true"></i> Already in your Library:
-						@duplicateLinks(p, d)
-					</span>
-				}
-				<div class="ms-auto d-flex flex-wrap align-items-center justify-content-end gap-2">
-					if best && mode.Text != "" {
-						<span class={ "small", templ.KV("text-warning-emphasis", mode.Warn), templ.KV("text-body-secondary", !mode.Warn) } title="beets' import config">
-							<i class="bi bi-files" aria-hidden="true"></i>
-							{ mode.Text }
-						</span>
-					}
-					<form method="post" action={ templ.SafeURL("/imports/" + id + "/choice") }>
-						<input type="hidden" name="prompt_id" value={ p.ID }/>
-						<input type="hidden" name="candidate" value={ strconv.Itoa(c.Index) }/>
-						<button class={ "btn btn-sm", templ.KV("btn-primary", best), templ.KV("btn-outline-primary", !best) } name="action" value="apply"><i class="bi bi-check-lg" aria-hidden="true"></i> Apply</button>
-					</form>
-				</div>
-			</div>
-			<div class="small text-body-secondary mb-1">
-				if n := changedFacts(facts); n > 0 {
-					{ c.DataSource } · { strconv.Itoa(n) } of { strconv.Itoa(len(facts)) } change
-				} else {
-					{ c.DataSource } · no changes
-				}
-			</div>
-			<table class="table table-sm table-borderless w-auto mb-0 delta-table">
-				<tbody>
-					for _, f := range facts {
-						<tr class={ templ.KV("changed", f.Changed) }>
-							<th class="fw-normal text-body-secondary pe-4">{ f.Label }</th>
-							<td>
-								if f.Changed {
-									@delta(f.Old, f.New)
-								} else {
-									{ f.New }
-								}
-							</td>
-						</tr>
-					}
-				</tbody>
-			</table>
-			if c.Track == nil {
-				{{ discs := candidateDiscs(c) }}
-				<div class="row g-3 mt-1">
-					for _, d := range discs {
-						<div class={ "col-lg-6" }>
-							<div class="small text-body-secondary mb-1">{ d.Label(len(discs) > 1) }</div>
-							<table class="table table-sm table-borderless mb-0 small delta-table track-table">
-								<tbody>
-									for _, r := range d.Rows {
-										<tr class={ templ.KV("changed", r.Changed()) }>
-											<td class="text-body-secondary font-monospace text-end pe-2 track-num">{ orDash(r.NewNum) }</td>
-											<td>
-												if r.TitleChanged {
-													@delta(r.OldTitle, r.NewTitle)
-												} else {
-													{ r.NewTitle }
-												}
-												if r.NumChanged && r.OldNum != "" {
-													<span class="text-body-secondary">(was track { r.OldNum })</span>
-												}
-											</td>
-											<td class="text-body-secondary text-end ps-2 track-length">{ r.Length }</td>
-										</tr>
-									}
-								</tbody>
-							</table>
-						</div>
-					}
-				</div>
-			}
-			if len(c.ExtraItems) > 0 {
-				<div class="small text-warning-emphasis">
-					<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
-					{ strconv.Itoa(len(c.ExtraItems)) } files don't match a track:
-					for _, path := range c.ExtraItems {
-						<span class="font-monospace">{ baseName(path) }</span>
-					}
-				</div>
-			}
-			if len(c.ExtraTracks) > 0 {
-				<div class="small text-warning-emphasis">
-					<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
-					{ strconv.Itoa(len(c.ExtraTracks)) } tracks have no file:
-					for i, t := range c.ExtraTracks {
-						if i > 0 {
-							·
-						}
-						{ valueString(t) }
-					}
-				</div>
-			}
-			if other := otherChanges(c); len(other) > 0 {
-				<details class="mt-2">
-					<summary class="small text-body-secondary">{ strconv.Itoa(len(other)) } more fields Apply also sets ({ strings.Join(other, ", ") })</summary>
-					<table class="table table-sm preview-table mt-2 mb-0">
-						<tbody>
-							for _, f := range candidateFiles(c) {
-								<tr>
-									<td class="small font-monospace text-break field-col">{ baseName(f.Path) }</td>
-									<td class="small">
-										for _, k := range otherChangesOf(f) {
-											<div class="text-break">
-												<code>{ k }</code> <del>{ valueString(f.Changes[k].Old) }</del> → <ins>{ valueString(f.Changes[k].New) }</ins>
-											</div>
-										}
-									</td>
-								</tr>
-							}
-						</tbody>
-					</table>
-				</details>
+	<div class="pt-2">
+		<div class="small text-body-secondary mb-1">
+			if n := changedFacts(facts); n > 0 {
+				{ c.DataSource } · { strconv.Itoa(n) } of { strconv.Itoa(len(facts)) } change
+			} else {
+				{ c.DataSource } · no changes
 			}
 		</div>
+		<table class="table table-sm table-borderless w-auto mb-0 delta-table">
+			<tbody>
+				for _, f := range facts {
+					<tr class={ templ.KV("changed", f.Changed) }>
+						<th class="fw-normal text-body-secondary pe-4">{ f.Label }</th>
+						<td>
+							if f.Changed {
+								@delta(f.Old, f.New)
+							} else {
+								{ f.New }
+							}
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		if c.Track == nil {
+			{{ discs := candidateDiscs(c) }}
+			<div class="row g-3 mt-1">
+				for _, d := range discs {
+					<div class={ "col-lg-6" }>
+						<div class="small text-body-secondary mb-1">{ d.Label(len(discs) > 1) }</div>
+						<table class="table table-sm table-borderless mb-0 small delta-table track-table">
+							<tbody>
+								for _, r := range d.Rows {
+									<tr class={ templ.KV("changed", r.Changed()) }>
+										<td class="text-body-secondary font-monospace text-end pe-2 track-num">{ orDash(r.NewNum) }</td>
+										<td>
+											if r.TitleChanged {
+												@delta(r.OldTitle, r.NewTitle)
+											} else {
+												{ r.NewTitle }
+											}
+											if r.NumChanged && r.OldNum != "" {
+												<span class="text-body-secondary">(was track { r.OldNum })</span>
+											}
+										</td>
+										<td class="text-body-secondary text-end ps-2 track-length">{ r.Length }</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+				}
+			</div>
+		}
+		if len(c.ExtraItems) > 0 {
+			<div class="small text-warning-emphasis">
+				<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+				{ strconv.Itoa(len(c.ExtraItems)) } files don't match a track:
+				for _, path := range c.ExtraItems {
+					<span class="font-monospace">{ baseName(path) }</span>
+				}
+			</div>
+		}
+		if len(c.ExtraTracks) > 0 {
+			<div class="small text-warning-emphasis">
+				<i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+				{ strconv.Itoa(len(c.ExtraTracks)) } tracks have no file:
+				for i, t := range c.ExtraTracks {
+					if i > 0 {
+						·
+					}
+					{ valueString(t) }
+				}
+			</div>
+		}
+		if other := otherChanges(c); len(other) > 0 {
+			<details class="mt-2">
+				<summary class="small text-body-secondary">{ strconv.Itoa(len(other)) } more fields Apply also sets ({ strings.Join(other, ", ") })</summary>
+				<table class="table table-sm preview-table mt-2 mb-0">
+					<tbody>
+						for _, f := range candidateFiles(c) {
+							<tr>
+								<td class="small font-monospace text-break field-col">{ baseName(f.Path) }</td>
+								<td class="small">
+									for _, k := range otherChangesOf(f) {
+										<div class="text-break">
+											<code>{ k }</code> <del>{ valueString(f.Changes[k].Old) }</del> → <ins>{ valueString(f.Changes[k].New) }</ins>
+										</div>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</details>
+		}
 	</div>
 }
 

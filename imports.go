@@ -235,6 +235,17 @@ func promptButtons(p importPrompt) []string {
 	return out
 }
 
+// moreChoices are the rarer ways to answer a match prompt, kept under More.
+func moreChoices(p importPrompt) []string {
+	var out []string
+	for _, c := range []string{"tracks", "albums"} {
+		if hasChoice(p, c) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func hasChoice(p importPrompt, c string) bool {
 	for _, have := range p.Choices {
 		if have == c {

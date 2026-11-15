@@ -62,3 +62,12 @@
 .log-number { width: 3rem; }
 .chip { font-size: .8rem; border: 1px solid var(--bs-border-color); border-radius: 999px; padding: .1rem .65rem; text-decoration: none; color: inherit; }
 .chip.on { background: var(--bs-primary); border-color: var(--bs-primary); color: #fff; }
+.verdict li { padding: .15rem 0; }
+.verdict summary { display: inline; cursor: pointer; text-decoration: underline dotted; }
+.verdict del { color: var(--bs-danger-text-emphasis); background: var(--bs-danger-bg-subtle); text-decoration: none; border-radius: .2rem; padding: 0 .2rem; }
+.verdict ins { color: var(--bs-success-text-emphasis); background: var(--bs-success-bg-subtle); text-decoration: none; border-radius: .2rem; padding: 0 .2rem; }
+kbd { font-size: .7em; padding: .05rem .3rem; background: var(--bs-secondary-bg); color: var(--bs-body-color); border: 1px solid var(--bs-border-color); }
+.btn-primary kbd { background: #fff3; color: #fff; border-color: #fff6; }
+.other-matches > summary { cursor: pointer; }
+.cand-row { cursor: pointer; }
+.cand-row:hover > * { background: var(--bs-tertiary-bg); }

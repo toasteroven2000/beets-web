@@ -40,11 +40,13 @@ func TestPromptWarnsThatTheAlbumIsAlreadyInTheLibrary(t *testing.T) {
 	}
 	libraryHas(f, map[string]any{"id": 1, "albumartist": "Afro-Cuban All Stars", "album": "Distinto, diferente"})
 	rec := get(t, h, "/imports/7")
-	mustContain(t, rec, "Already in your Library:", `href="/albums/1"`, "Album 1", "makes beets ask what to do about the duplicate")
-	// The Candidates that are the same Album say so, the other doesn't.
-	if n := strings.Count(rec.Body.String(), `class="badge text-bg-warning fw-normal"`); n != 2 {
+	// The files' own tags are a duplicate: said beside them.
+	mustContain(t, rec, `class="badge text-bg-warning fw-normal"`, "Already in your Library:", `href="/albums/1"`, "Album 1")
+	// The two Candidates that are the same Album say so in their verdict, the other doesn't.
+	if n := strings.Count(rec.Body.String(), "Your Library already has this release as"); n != 2 {
 		t.Errorf("%d Candidates marked, want 2", n)
 	}
+	mustContain(t, rec, "beets will ask whether to skip it, keep both, remove the old one or merge them")
 	// One question to the Library, exact, one group per distinct name, and "scope" is Albums.
 	r, _ := f.last(t, "GET", "/list")
 	q := r.URL.Query()
@@ -86,8 +88,8 @@ func TestACandidateThatIsADuplicateIsMarkedEvenWhenTheFilesTagsAreNot(t *testing
 	}
 	libraryHas(f, map[string]any{"id": 1, "albumartist": "Afro-Cuban All Stars", "album": "Distinto, diferente"})
 	rec := get(t, h, "/imports/7")
-	mustContain(t, rec, `class="badge text-bg-warning fw-normal"`, `href="/albums/1"`)
-	if strings.Contains(rec.Body.String(), "alert-warning") {
+	mustContain(t, rec, "Your Library already has this release as", `href="/albums/1"`)
+	if strings.Contains(rec.Body.String(), `class="badge text-bg-warning fw-normal"`) {
 		t.Error("the files' own tags are not a duplicate, only the Candidate is")
 	}
 }

@@ -204,7 +204,7 @@ func TestAlbumPromptShowsCandidatesAndChoices(t *testing.T) {
 		"<del>come together</del>", "<ins>Come Together</ins>", "4:20",
 		"1 more fields Apply also sets (mb_albumid)", "<code>mb_albumid</code>", "Her Majesty",
 		`name="action" value="apply"`, `name="candidate" value="0"`, `name="prompt_id" value="p1"`,
-		">Use as-is<", ">Import as tracks<", ">Group albums<", ">Skip<", "Search again", `value="Abbey Rd"`, "medium")
+		"Use as-is <kbd>U</kbd>", ">Import as tracks<", ">Group albums<", "Skip <kbd>S</kbd>", "Search again", `value="Abbey Rd"`, "medium")
 	if strings.Contains(rec.Body.String(), `hx-trigger`) {
 		t.Error("polls while waiting for a Choice")
 	}
@@ -227,7 +227,8 @@ func TestCandidateListsEveryTrackByDiscWithArrowsOnlyOnChanges(t *testing.T) {
 	rec := get(t, h, "/imports/7")
 	mustContain(t, rec, "Disc 1 · 2 tracks · 1 changed", "Disc 2 · 1 track · all match", "Same One", "Same Three",
 		"<del>sloppy two</del>", "<ins>Sloppy Two</ins>", "originals are deleted") // a move says so by Apply
-	if strings.Count(rec.Body.String(), "<del>") != 1 {
+	// Once in the verdict ("Renames 1 of 3 tracks") and once in the track list beneath it.
+	if strings.Count(rec.Body.String(), "<del>") != 2 {
 		t.Errorf("only the one changed title should have an old value shown:\n%s", rec.Body.String())
 	}
 }
@@ -527,5 +528,37 @@ func TestSingletonOutcomeLinksItemsOnly(t *testing.T) {
 	mustContain(t, rec, `href="/items/11"`)
 	if strings.Contains(rec.Body.String(), `href="/albums/`) {
 		t.Error("an Album link for a singleton")
+	}
+}
+
+func TestPromptActionsComeRightAfterTheVerdictSoTheyNeedNoScrolling(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, albumPrompt()) }
+	body := get(t, h, "/imports/7").Body.String()
+	details := strings.Index(body, "Every field and track")
+	if details < 0 {
+		t.Fatal("no details fold")
+	}
+	for _, want := range []string{`data-key="a"`, `value="asis"`, ">Import as tracks<", ">Group albums<", `value="skip"`, "Search again"} {
+		if i := strings.Index(body, want); i < 0 || i > details {
+			t.Errorf("%q is not above the Candidate's details", want)
+		}
+	}
+	if strings.Count(body, `value="asis"`) != 1 {
+		t.Error("the actions are shown twice")
+	}
+}
+
+func TestDuplicatePromptKeepsItsChoicesAboveTheExplanations(t *testing.T) {
+	f, h := newTest(t)
+	op := dupePrompt("duplicate", map[string]string{})
+	pr := op["result"].(map[string]any)["prompt"].(map[string]any)
+	pr["existing"], pr["choices"] = []any{map[string]any{"id": 4, "albumartist": "AC/DC", "album": "Back in Black"}}, []string{"skip", "keep", "remove", "abort"}
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, op) }
+	body := get(t, h, "/imports/7").Body.String()
+	skip, help := strings.Index(body, `value="skip"`), strings.Index(body, "<strong>Skip:</strong>")
+	existing := strings.Index(body, "Back in Black")
+	if !(existing >= 0 && existing < skip && skip < help) {
+		t.Errorf("order: existing %d, Skip button %d, explanations %d", existing, skip, help)
 	}
 }
