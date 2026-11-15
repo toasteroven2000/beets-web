@@ -4,7 +4,7 @@ package main
 // beets-api records as the Actor of this person's changes.
 templ profileView(who identity) {
 	@layout("Profile", "Profile") {
-		@pageHeader("Profile", "What the proxy told beets-ui about you") {
+		@pageHeader("Profile", "What the proxy told beets-web about you") {
 		}
 		<table class="table table-sm align-middle w-auto">
 			<thead>
@@ -39,7 +39,7 @@ templ profileView(who identity) {
 			<code>{ who.ActorHeader }</code> header.
 		</p>
 		<p class="small text-body-secondary">
-			Which header that is comes from beets-ui's <code>BEETS_UI_ACTOR_HEADER</code> setting. Groups are shown but not used: beets-ui lets everyone Authelia admits do everything.
+			Which header that is comes from beets-web's <code>BEETS_WEB_ACTOR_HEADER</code> setting. Groups are shown but not used: beets-web lets everyone Authelia admits do everything.
 		</p>
 	}
 }

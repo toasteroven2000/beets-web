@@ -116,7 +116,7 @@ func TestSetArtWithoutArtSetsItStraightAway(t *testing.T) {
 		t.Fatalf("status %d location %q", rec.Code, rec.Header().Get("Location"))
 	}
 	r, body := f.last(t, "PUT", "/albums/2/art")
-	if body != string(img) || r.Header.Get("Content-Type") != "image/png" || r.Header.Get("X-Beets-API-Client") != "beets-ui" {
+	if body != string(img) || r.Header.Get("Content-Type") != "image/png" || r.Header.Get("X-Beets-API-Client") != "beets-web" {
 		t.Errorf("PUT %q %d bytes", r.Header.Get("Content-Type"), len(body))
 	}
 }
@@ -251,7 +251,7 @@ func TestRemoveArtAsksFirst(t *testing.T) {
 	if rec.Header().Get("Location") != "/albums/2?tab=art&removed=1" {
 		t.Fatalf("went to %q", rec.Header().Get("Location"))
 	}
-	if r, _ := f.last(t, "DELETE", "/albums/2/art"); r.Header.Get("X-Beets-API-Client") != "beets-ui" {
+	if r, _ := f.last(t, "DELETE", "/albums/2/art"); r.Header.Get("X-Beets-API-Client") != "beets-web" {
 		t.Errorf("X-Beets-API-Client %q", r.Header.Get("X-Beets-API-Client"))
 	}
 	mustContain(t, get(t, h, "/albums/2?tab=art&removed=1"), "Art removed.")

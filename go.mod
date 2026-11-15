@@ -1,4 +1,4 @@
-module beets-ui
+module beets-web
 
 go 1.26.0
 

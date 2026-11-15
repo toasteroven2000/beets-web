@@ -53,7 +53,7 @@ func TestActorAndClientAreSentToBeetsAPI(t *testing.T) {
 	f.routes["GET /albums/2"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"id": 2}) }
 	get(t, h, "/albums/2", "Remote-User", "alex", "Remote-Name", "Alex Rivera")
 	r, _ := f.last(t, "GET", "/albums/2")
-	if r.Header.Get("X-Beets-API-Actor") != "alex" || r.Header.Get("X-Beets-API-Client") != "beets-ui" || r.Header.Get("X-Client") != "" {
+	if r.Header.Get("X-Beets-API-Actor") != "alex" || r.Header.Get("X-Beets-API-Client") != "beets-web" || r.Header.Get("X-Client") != "" {
 		t.Errorf("headers %v", r.Header)
 	}
 }
@@ -170,7 +170,7 @@ func TestAuditShowsActorsAndFiltersByThem(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /audit"] = func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"total": 1, "limit": 50, "offset": 0, "results": []any{
-			map[string]any{"id": 1, "recorded_at": "2026-11-10T09:00:00Z", "client": "beets-ui", "actor": "alice", "action": "art.remove", "target": "album:5", "operation_id": nil, "changes": map[string]any{}},
+			map[string]any{"id": 1, "recorded_at": "2026-11-10T09:00:00Z", "client": "beets-web", "actor": "alice", "action": "art.remove", "target": "album:5", "operation_id": nil, "changes": map[string]any{}},
 		}})
 	}
 	rec := get(t, h, "/audit?actor=alice")

@@ -200,7 +200,7 @@ type beetsAPI struct {
 
 // clientName is sent as X-Beets-API-Client, so beets-api's audit shows which
 // changes came through the UI.
-const clientName = "beets-ui"
+const clientName = "beets-web"
 
 // stamp says who is calling beets-api: this program, and the person it acts
 // for, whose name beets-api records in its Audit.

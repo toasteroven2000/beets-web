@@ -1,5 +1,5 @@
 .DS_Store
-/beets-ui
+/beets-web
 *_templ.go
 
 # Devenv

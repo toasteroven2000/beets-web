@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	userAgent   = "beets-ui (album art search)"
+	userAgent   = "beets-web (album art search)"
 	maxArtBytes = 20 << 20 // beets-api's limit
 )
 

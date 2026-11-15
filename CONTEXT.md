@@ -1,4 +1,4 @@
-# Beets UI
+# Beets Web
 
 A web UI for browsing a beets library and changing its metadata, through beets-api. It uses beets-api's language (and so beets' own) and adds no synonyms of its own.
 
@@ -96,9 +96,9 @@ One change to one Album or Item (including its art): when, by which Client and A
 _Avoid_: Event, revision
 
 **Client**:
-The program calling beets-api, as it names itself; this UI is `beets-ui`. A label, not proof.
+The program calling beets-api, as it names itself; this UI is `beets-web`. A label, not proof.
 _Avoid_: User, caller
 
 **Actor**:
-The person using the UI, as the proxy in front of it says (from the `Remote-User` header by default). beets-ui passes it to beets-api, which records it on each Audit entry and each Choice of an Import. Not proof either: it holds only while the proxy is the one way in.
+The person using the UI, as the proxy in front of it says (from the `Remote-User` header by default). beets-web passes it to beets-api, which records it on each Audit entry and each Choice of an Import. Not proof either: it holds only while the proxy is the one way in.
 _Avoid_: User, account, Client

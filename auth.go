@@ -1,11 +1,11 @@
 package main
 
-// Who is using beets-ui. beets-ui signs nobody in: it sits behind a reverse
+// Who is using beets-web. beets-web signs nobody in: it sits behind a reverse
 // proxy (Traefik with Authelia's forward auth) that does, and which sends the
 // person's identity in headers. Every request must carry the Actor header or
 // it is refused, so nothing is written without saying who wrote it.
 //
-// The headers are only trustworthy when beets-ui is reachable through the
+// The headers are only trustworthy when beets-web is reachable through the
 // proxy alone: anything that can connect directly can send them itself. In
 // development a browser extension can add them.
 
@@ -137,7 +137,7 @@ func (s *server) requireActor(next http.Handler) http.Handler {
 	})
 }
 
-// handleProfile shows what the proxy told beets-ui about the person, and what
+// handleProfile shows what the proxy told beets-web about the person, and what
 // beets-api records for their changes.
 func (s *server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	render(w, http.StatusOK, profileView(currentUser(r.Context())))

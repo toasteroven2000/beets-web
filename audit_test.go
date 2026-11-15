@@ -11,7 +11,7 @@ func TestAuditListsChanges(t *testing.T) {
 	f, h := newTest(t)
 	f.routes["GET /audit"] = func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"total": 2, "limit": 50, "offset": 0, "results": []any{
-			map[string]any{"id": 2, "recorded_at": "2026-11-09T22:40:00Z", "client": "beets-ui", "action": "album.modify", "target": "album:5", "operation_id": 7,
+			map[string]any{"id": 2, "recorded_at": "2026-11-09T22:40:00Z", "client": "beets-web", "action": "album.modify", "target": "album:5", "operation_id": 7,
 				"changes": map[string]any{"year": map[string]any{"old": 1969, "new": 1970}}},
 			map[string]any{"id": 1, "recorded_at": "2026-11-09T22:39:00Z", "client": nil, "action": "art.remove", "target": "album:5", "operation_id": nil,
 				"changes": map[string]any{"artpath": map[string]any{"old": "/m/cover.jpg", "new": nil}, "trashed_to": []any{map[string]any{"from": "/m/cover.jpg", "to": "/trash/art/cover.jpg"}}}},
@@ -68,7 +68,7 @@ func TestMsTimeShowsThreeDecimals(t *testing.T) {
 }
 
 func auditEntryRoute(f *fakeAPI) {
-	entry := map[string]any{"id": 12, "recorded_at": "2026-11-14T09:00:24.893931+00:00", "client": "beets-ui", "actor": "alex",
+	entry := map[string]any{"id": 12, "recorded_at": "2026-11-14T09:00:24.893931+00:00", "client": "beets-web", "actor": "alex",
 		"action": "album.modify", "target": "album:5", "operation_id": 7,
 		"changes": map[string]any{"year": map[string]any{"old": 1969, "new": 1970}, "tags": []any{"a", "b"}}}
 	f.routes["GET /audit/12"] = func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, entry) }
@@ -95,7 +95,7 @@ func TestAuditEntryPageShowsItWhole(t *testing.T) {
 	rec := get(t, h, "/audit/12")
 	mustContain(t, rec, "Audit entry 12", "Entry 12", "2026-11-14T09:00:24.893+00:00",
 		"Year 1969 → 1970", // the summary is the heading
-		`actor-mark">A</span>alex`, "via beets-ui", `href="/modifications/7"`, "Modification 7",
+		`actor-mark">A</span>alex`, "via beets-web", `href="/modifications/7"`, "Modification 7",
 		`href="/audit?target=album%3A5"`, `href="/audit?actor=alex"`, `href="/audit?operation=7"`,
 		`<span class="same">19</span><del>69</del><span class="same"></span>`, "<ins>70</ins>", // only what differs is marked
 		`<div class="font-monospace small text-break">a</div>`,

@@ -60,7 +60,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-// signedIn is the proxy: it sends the Actor header, which beets-ui requires, unless
+// signedIn is the proxy: it sends the Actor header, which beets-web requires, unless
 // a request asks to be anonymous or sets one itself.
 func signedIn(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
