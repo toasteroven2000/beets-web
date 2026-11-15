@@ -184,7 +184,7 @@ func TestArtistPageQueriesByWholeName(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
-	mustContain(t, rec, "Back in Black", `href="/artists/Friends"`, "Modify all 1 Album")
+	mustContain(t, rec, "Back in Black", `href="/library?artist=Friends"`, "Modify all 1 Album")
 	r, _ := f.last(t, "GET", "/list")
 	if got := r.URL.Query().Get("scope"); got != "album" {
 		t.Errorf("scope %q", got)

@@ -109,12 +109,17 @@ type filters struct {
 	Genre     string
 	AlbumType string
 	Format    string
+	Artist    string // a whole Artist name, matched on albumartist for Albums and artist for Items
 }
 
-func (f filters) Combined() string {
+// Combined is the query for k: the raw query and every filter.
+func (f filters) Combined(k scope, separators []string) string {
 	var terms []string
 	if q := strings.TrimSpace(f.Query); q != "" {
 		terms = append(terms, q)
+	}
+	if f.Artist != "" {
+		terms = append(terms, artistQuery(k, f.Artist, separators))
 	}
 	if f.YearFrom != "" || f.YearTo != "" {
 		terms = append(terms, "year:"+f.YearFrom+".."+f.YearTo)
@@ -132,7 +137,7 @@ func (f filters) Combined() string {
 }
 
 func (f filters) Active() bool {
-	return f.YearFrom != "" || f.YearTo != "" || f.Genre != "" || f.AlbumType != "" || f.Format != ""
+	return f.Artist != "" || f.YearFrom != "" || f.YearTo != "" || f.Genre != "" || f.AlbumType != "" || f.Format != ""
 }
 
 // hasSort reports whether a query has a beets sort term: one ending in + or -

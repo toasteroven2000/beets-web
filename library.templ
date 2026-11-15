@@ -159,11 +159,11 @@ templ allMenu(p libraryPage, k scope, total int) {
 	<div class="dropdown">
 		<button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">All { count(total, k) }</button>
 		<ul class="dropdown-menu dropdown-menu-end">
-			<li><a class="dropdown-item" href={ templ.URL(modifyAllURL(k, p.Filters.Combined())) }><i class="bi bi-pencil" aria-hidden="true"></i> Modify all { strconv.Itoa(total) }…</a></li>
+			<li><a class="dropdown-item" href={ templ.URL(modifyAllURL(k, p.Query(k))) }><i class="bi bi-pencil" aria-hidden="true"></i> Modify all { strconv.Itoa(total) }…</a></li>
 			<li>
 				<form method="post" action="/removals">
 					<input type="hidden" name="scope" value={ string(k) }/>
-					<input type="hidden" name="q" value={ p.Filters.Combined() }/>
+					<input type="hidden" name="q" value={ p.Query(k) }/>
 					<button class="dropdown-item text-danger"><i class="bi bi-trash" aria-hidden="true"></i> Remove all { strconv.Itoa(total) }…</button>
 				</form>
 			</li>
@@ -253,7 +253,7 @@ templ albumTiles(t tableData, pick bool) {
 			</a>
 			<div class="tile-title text-truncate"><a href={ templ.URL(recordURL(albums, a.ID())) }>{ orDash(a.Str("album")) }</a></div>
 			<div class="small text-body-secondary text-truncate">
-				{ a.Str("albumartist") }
+				@artistLinks(a.Str("albumartist"), t.Separators)
 				if y := yearText(a); y != "" {
 					· { y }
 				}
@@ -299,7 +299,9 @@ templ albumRows(t tableData, pick bool) {
 			}
 			<td class="mini-col"><img class="mini-art" src={ "/albums/" + strconv.Itoa(a.ID()) + "/art" } alt="" loading="lazy" onerror="this.style.visibility='hidden'"/></td>
 			<td><a class="title-link" href={ templ.URL(recordURL(albums, a.ID())) }>{ orDash(a.Str("album")) }</a></td>
-			<td class="quiet">{ a.Str("albumartist") }</td>
+			<td class="quiet">
+				@artistLinks(a.Str("albumartist"), t.Separators)
+			</td>
 			<td>{ yearText(a) }</td>
 			<td class="small text-body-secondary">{ a.Str("albumtype") }</td>
 		</tr>
@@ -345,7 +347,9 @@ templ itemRows(t tableData, pick bool) {
 				<td class="select-col"><input class="form-check-input" type="checkbox" name="id" value={ strconv.Itoa(r.ID()) } aria-label="Select"/></td>
 			}
 			<td><a class="title-link" href={ templ.URL(recordURL(items, r.ID())) }>{ orDash(r.Str("title")) }</a></td>
-			<td class="quiet">{ r.Str("artist") }</td>
+			<td class="quiet">
+				@artistLinks(r.Str("artist"), t.Separators)
+			</td>
 			<td class="quiet">
 				if id := r.Int("album_id"); id != 0 {
 					<a class="quiet-link" href={ templ.URL(recordURL(albums, id)) }>{ orDash(r.Str("album")) }</a>

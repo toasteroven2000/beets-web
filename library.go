@@ -61,6 +61,7 @@ type libraryPage struct {
 	View    string // Albums as "grid" or "list"
 	Sort    string
 	Filters filters
+	Separators []string
 	Counts  map[scope]int
 	Albums  tableData
 	Items   tableData
@@ -69,7 +70,10 @@ type libraryPage struct {
 
 // Scoped tells whether a search or filter narrows the Library. Only then is
 // acting on everything shown offered: the blast radius is never everything.
-func (p libraryPage) Scoped() bool { return p.Filters.Combined() != "" }
+func (p libraryPage) Scoped() bool { return p.Filters.Combined(albums, nil) != "" }
+
+// Query is what the Library searches k for.
+func (p libraryPage) Query(k scope) string { return p.Filters.Combined(k, p.Separators) }
 
 // URL is the Library with some of its settings changed.
 func (p libraryPage) URL(change func(*libraryPage)) string {
@@ -87,6 +91,7 @@ func (p libraryPage) URL(change func(*libraryPage)) string {
 		set("show", q.Show)
 	}
 	set("q", q.Filters.Query)
+	set("artist", q.Filters.Artist)
 	set("year_from", q.Filters.YearFrom)
 	set("year_to", q.Filters.YearTo)
 	set("genre", q.Filters.Genre)
@@ -133,6 +138,9 @@ func (p libraryPage) Chips() []filterChip {
 	var chips []filterChip
 	add := func(label string, clear func(*filters)) {
 		chips = append(chips, filterChip{label, p.URL(func(q *libraryPage) { clear(&q.Filters) })})
+	}
+	if f.Artist != "" {
+		add("artist: "+f.Artist, func(f *filters) { f.Artist = "" })
 	}
 	if f.YearFrom != "" || f.YearTo != "" {
 		add("year "+orDash(f.YearFrom)+"–"+orDash(f.YearTo), func(f *filters) { f.YearFrom, f.YearTo = "", "" })
@@ -182,19 +190,19 @@ func (s *server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 	default:
 		p.Show = "albums"
 	}
-	query := p.Filters.Combined()
 	ctx := r.Context()
 	seps := s.separators(ctx)
+	p.Separators = seps
 	list := func(k scope, limit, offset int) (tableData, error) {
-		res, err := s.api.List(ctx, k, sortQuery(query, k, p.Sort), limit, offset, listFields[k])
+		res, err := s.api.List(ctx, k, sortQuery(p.Query(k), k, p.Sort), limit, offset, listFields[k])
 		if err != nil {
 			return tableData{}, err
 		}
 		p.Counts[k] = res.Total
-		return tableData{Scope: k, Query: query, Rows: res.Results, Total: res.Total, Next: nextURL(r, res), Separators: seps}, nil
+		return tableData{Scope: k, Query: p.Query(k), Rows: res.Results, Total: res.Total, Next: nextURL(r, res), Separators: seps}, nil
 	}
 	count := func(k scope) error {
-		res, err := s.api.List(ctx, k, query, 1, 0, []string{"id"})
+		res, err := s.api.List(ctx, k, p.Query(k), 1, 0, []string{"id"})
 		p.Counts[k] = res.Total
 		return err
 	}

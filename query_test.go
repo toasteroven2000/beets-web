@@ -55,7 +55,7 @@ func TestSplitArtists(t *testing.T) {
 func TestFiltersCombined(t *testing.T) {
 	f := filters{Query: " love ", YearFrom: "1960", Genre: "Rock & Roll", Format: "FLAC"}
 	want := `love year:1960.. 'genres:Rock & Roll' 'format:FLAC'`
-	if got := f.Combined(); got != want {
+	if got := f.Combined(albums, nil); got != want {
 		t.Errorf("got %s", got)
 	}
 }

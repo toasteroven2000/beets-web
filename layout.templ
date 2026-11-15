@@ -124,11 +124,11 @@ templ errorPage(status int, msg string) {
 	}
 }
 
-// artistLinks links each Artist a credit names, keeping the credit's own text
+// artistLinks links each Artist a credit names to the Library filtered to them, keeping the credit's own text
 // between them.
 templ artistLinks(credit string, separators []string) {
 	if names := splitArtists(credit, separators); len(names) == 1 {
-		<a href={ templ.URL(artistURL(names[0], "")) }>{ credit }</a>
+		<a href={ templ.URL(artistLibraryURL(names[0])) }>{ credit }</a>
 	} else if len(names) == 0 {
 		<span class="text-body-secondary">—</span>
 	} else {
@@ -136,7 +136,7 @@ templ artistLinks(credit string, separators []string) {
 			if i > 0 {
 				<span class="text-body-secondary">·</span>
 			}
-			<a href={ templ.URL(artistURL(name, "")) }>{ name }</a>
+			<a href={ templ.URL(artistLibraryURL(name)) }>{ name }</a>
 		}
 	}
 }

@@ -224,6 +224,7 @@ func filtersFrom(r *http.Request) filters {
 		Query:     get("q"),
 		YearFrom:  get("year_from"),
 		YearTo:    get("year_to"),
+		Artist:    get("artist"),
 		Genre:     get("genre"),
 		AlbumType: get("albumtype"),
 		Format:    get("format"),

@@ -171,3 +171,26 @@ func TestLibraryURL(t *testing.T) {
 		t.Error("sort")
 	}
 }
+
+func TestLibraryArtistNamesLinkToTheLibraryFilteredToThem(t *testing.T) {
+	f, h := newTest(t)
+	libraryAPI(f, 2, 1)
+	rec := get(t, h, "/library")
+	mustContain(t, rec, `href="/library?artist=Bing+Crosby"`, `href="/library?artist=Beegie+Adair"`)
+	rec = get(t, h, "/library?show=items")
+	mustContain(t, rec, `href="/library?artist=Bing+Crosby"`)
+}
+
+func TestLibraryArtistFilterQueriesEachScopeByItsOwnField(t *testing.T) {
+	f, h := newTest(t)
+	libraryAPI(f, 2, 1)
+	rec := get(t, h, "/library?artist=Bing+Crosby")
+	mustContain(t, rec, "artist: Bing Crosby", "Modify all")
+	calls := listCalls(f)
+	if q := calls["album"][0].Get("query"); !strings.Contains(q, "albumartist::") || !strings.Contains(q, "Bing Crosby") {
+		t.Errorf("Albums query: %s", q)
+	}
+	if q := calls["item"][0].Get("query"); !strings.Contains(q, "'artist::") {
+		t.Errorf("Items query: %s", q)
+	}
+}

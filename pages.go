@@ -215,6 +215,11 @@ func artistURL(name string, tab scope) string {
 	return u
 }
 
+// artistLibraryURL is the Library filtered to one Artist.
+func artistLibraryURL(name string) string {
+	return "/library?" + url.Values{"artist": {name}}.Encode()
+}
+
 func recordURL(k scope, id int) string {
 	return "/" + string(k) + "/" + strconv.Itoa(id)
 }
