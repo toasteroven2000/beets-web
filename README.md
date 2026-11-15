@@ -2,7 +2,7 @@
 
 A web UI for browsing a beets Library and Modifying it, through [beets-api](../beets-api). It is modelled on beets-flask's library browser, with Modify added. It signs nobody in: a reverse proxy does, and every request must say who it is from (see [Who is making a change](#who-is-making-a-change)). It listens on 127.0.0.1 unless told otherwise.
 
-Domain language is in [CONTEXT.md](CONTEXT.md) (shared with beets-api), and decisions are in [docs/adr](docs/adr). The v1 spec is [.scratch/ui-v1/spec.md](.scratch/ui-v1/spec.md).
+Domain language is in [CONTEXT.md](CONTEXT.md) (shared with beets-api), and decisions are in [docs/adr](docs/adr).
 
 ## Running
 
