@@ -216,7 +216,7 @@ templ albumTiles(t tableData, pick bool) {
 			}
 			<a class="tile-art" href={ templ.URL(recordURL(albums, a.ID())) } tabindex="-1" aria-hidden="true">
 				<i class="bi bi-disc" aria-hidden="true"></i>
-				<img src={ "/albums/" + strconv.Itoa(a.ID()) + "/art" } alt="" loading="lazy" onerror="this.remove()"/>
+				<img src={ thumbURL(a.ID()) } alt="" loading="lazy" onerror="this.remove()"/>
 			</a>
 			<div class="tile-title text-truncate"><a href={ templ.URL(recordURL(albums, a.ID())) }>{ orDash(a.Str("album")) }</a></div>
 			<div class="small text-body-secondary text-truncate">
@@ -264,7 +264,7 @@ templ albumRows(t tableData, pick bool) {
 			if pick {
 				<td class="select-col"><input class="form-check-input" type="checkbox" name="id" value={ strconv.Itoa(a.ID()) } aria-label="Select"/></td>
 			}
-			<td class="mini-col"><img class="mini-art" src={ "/albums/" + strconv.Itoa(a.ID()) + "/art" } alt="" loading="lazy" onerror="this.style.visibility='hidden'"/></td>
+			<td class="mini-col"><img class="mini-art" src={ thumbURL(a.ID()) } alt="" loading="lazy" onerror="this.style.visibility='hidden'"/></td>
 			<td><a class="title-link" href={ templ.URL(recordURL(albums, a.ID())) }>{ orDash(a.Str("album")) }</a></td>
 			<td class="quiet">
 				@artistLinks(a.Str("albumartist"), t.Separators)

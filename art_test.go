@@ -264,3 +264,35 @@ func TestRemoveArtWithoutArtGoesBack(t *testing.T) {
 		t.Errorf("went to %q", rec.Header().Get("Location"))
 	}
 }
+
+// The browser may keep art, but must check it: an unchanged copy is a 304
+// with no body, and the ETag from beets-api goes out with the image.
+func TestArtRevalidatesWithTheBrowsersETag(t *testing.T) {
+	img := pngBytes(t, 4, 4)
+	f, h, _ := newArtTest(t, func(w http.ResponseWriter, r *http.Request) {})
+	f.routes["GET /albums/2/art"] = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", `"abc"`)
+		w.Header().Set("Content-Type", "image/png")
+		if r.Header.Get("If-None-Match") == `"abc"` {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Write(img)
+	}
+
+	rec := get(t, h, "/albums/2/art")
+	if rec.Code != http.StatusOK || rec.Body.String() != string(img) {
+		t.Fatalf("first fetch: status %d, body %d bytes", rec.Code, rec.Body.Len())
+	}
+	if rec.Header().Get("ETag") != `"abc"` || rec.Header().Get("Cache-Control") != "private, no-cache" {
+		t.Fatalf("first fetch headers: ETag %q, Cache-Control %q", rec.Header().Get("ETag"), rec.Header().Get("Cache-Control"))
+	}
+
+	rec = get(t, h, "/albums/2/art", "If-None-Match", `"abc"`)
+	if rec.Code != http.StatusNotModified || rec.Body.Len() != 0 {
+		t.Fatalf("revalidation: status %d, body %d bytes; want 304 with no body", rec.Code, rec.Body.Len())
+	}
+	if r, _ := f.last(t, "GET", "/albums/2/art"); r.Header.Get("If-None-Match") != `"abc"` {
+		t.Fatalf("beets-api got If-None-Match %q, want the browser's", r.Header.Get("If-None-Match"))
+	}
+}

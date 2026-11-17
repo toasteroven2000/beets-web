@@ -22,7 +22,8 @@ type server struct {
 	api         *beetsAPI
 	art         *artSearch
 	pending     pendingArt
-	actorHeader string // the header the proxy puts the person's name in
+	thumbs      *thumbCache // nil: the Library shows full covers
+	actorHeader string      // the header the proxy puts the person's name in
 }
 
 func newServer(apiURL string, client *http.Client) *server {
@@ -40,6 +41,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /albums/{id}", s.handleRecord(albums))
 	mux.HandleFunc("GET /items/{id}", s.handleRecord(items))
 	mux.HandleFunc("GET /albums/{id}/art", s.handleArt)
+	mux.HandleFunc("GET /albums/{id}/thumb", s.handleThumb)
 	mux.HandleFunc("GET /items/{id}/audio", s.handleItemAudio)
 	mux.HandleFunc("GET /import-paths/audio", s.handleImportAudio)
 	mux.HandleFunc("GET /albums/{id}/art/search", s.handleArtSearch)
@@ -235,7 +237,7 @@ func (s *server) recordPage(ctx context.Context, k scope, id int, tab string) (r
 
 // currentArt is an Album's art as beets-api serves it, if it has any.
 func (s *server) currentArt(ctx context.Context, id int) artInfo {
-	resp, err := s.api.AlbumArt(ctx, id)
+	resp, err := s.api.AlbumArt(ctx, id, nil)
 	if err != nil {
 		return artInfo{}
 	}
@@ -249,19 +251,32 @@ func (s *server) handleArt(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	resp, err := s.api.AlbumArt(r.Context(), id)
+	resp, err := s.api.AlbumArt(r.Context(), id, r.Header)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	defer resp.Body.Close()
+	// Set art keeps the same URL, so the browser may keep a copy but must
+	// check it each time. An unchanged copy is a 304 with no body: the ETag
+	// and Last-Modified come from beets-api, which sets them from the file.
+	// private: the art is behind sign-in, so no shared cache may hold it.
+	w.Header().Set("Cache-Control", "private, no-cache")
+	// beets-api answers in full even when the browser's copy is current.
+	if resp.StatusCode == http.StatusNotModified || etagMatches(r.Header.Get("If-None-Match"), resp.Header.Get("ETag")) {
+		for _, h := range []string{"ETag", "Last-Modified"} {
+			if v := resp.Header.Get(h); v != "" {
+				w.Header().Set(h, v)
+			}
+		}
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
 	for _, h := range []string{"Content-Type", "Content-Length", "ETag", "Last-Modified"} {
 		if v := resp.Header.Get(h); v != "" {
 			w.Header().Set(h, v)
 		}
 	}
-	// Set art keeps the same URL, so the browser must check it each time.
-	w.Header().Set("Cache-Control", "no-cache")
 	io.Copy(w, resp.Body)
 }
 
@@ -548,7 +563,9 @@ func (s *server) handleSetArt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) setArt(w http.ResponseWriter, r *http.Request, id int, data []byte) {
-	if err := s.api.SetAlbumArt(r.Context(), id, data); err != nil {
+	err := s.api.SetAlbumArt(r.Context(), id, data)
+	s.thumbs.forget(id)
+	if err != nil {
 		var e *apiError
 		if errors.As(err, &e) && e.Status != http.StatusNotFound && e.Status < 500 {
 			s.artError(w, r, id, e.Detail)
@@ -665,7 +682,9 @@ func (s *server) handleArtRemove(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.api.RemoveAlbumArt(r.Context(), id); err != nil {
+	err := s.api.RemoveAlbumArt(r.Context(), id)
+	s.thumbs.forget(id)
+	if err != nil {
 		fail(w, err)
 		return
 	}

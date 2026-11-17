@@ -42,7 +42,7 @@ func TestLibraryShowsAlbumsAsCoversAndCountsBoth(t *testing.T) {
 	rec := get(t, h, "/library")
 	mustContain(t, rec, "<h1 class=\"h3 mb-3\">Library</h1>",
 		`aria-current="page" href="/library">Albums <span class="badge text-bg-primary">21</span>`, `href="/library?show=items">Items <span class="badge text-bg-secondary">276</span>`,
-		`class="tiles"`, `src="/albums/1/art"`, `loading="lazy"`, `href="/albums/1"`, "White Christmas", "Bing Crosby", "1992",
+		`class="tiles"`, `src="/albums/1/thumb"`, `loading="lazy"`, `href="/albums/1"`, "White Christmas", "Bing Crosby", "1992",
 		`name="id" value="1"`, `class="selection-bar" hidden`, `src="/public/static/library.js?v=`, "21 Albums", "Artist")
 	body := rec.Body.String()
 	if strings.Contains(body, ">All <") || strings.Contains(body, "Modify all") || strings.Contains(body, "Remove all") {

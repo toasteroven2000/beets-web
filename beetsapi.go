@@ -342,17 +342,25 @@ func (c *beetsAPI) Modifications(ctx context.Context, limit, offset int) (modLis
 	return out, err
 }
 
-// AlbumArt fetches an Album's art. Callers treat any error as "no art".
-func (c *beetsAPI) AlbumArt(ctx context.Context, id int) (*http.Response, error) {
+// AlbumArt fetches an Album's art. Callers treat any error as "no art". The
+// browser's If-None-Match and If-Modified-Since (from conditional, may be nil)
+// are passed on, so an unchanged image comes back as 304 Not Modified with no
+// body.
+func (c *beetsAPI) AlbumArt(ctx context.Context, id int, conditional http.Header) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/albums/"+strconv.Itoa(id)+"/art", nil)
 	if err != nil {
 		return nil, err
+	}
+	for _, h := range []string{"If-None-Match", "If-Modified-Since"} {
+		if v := conditional.Get(h); v != "" {
+			req.Header.Set(h, v)
+		}
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotModified {
 		resp.Body.Close()
 		return nil, &apiError{Status: resp.StatusCode}
 	}

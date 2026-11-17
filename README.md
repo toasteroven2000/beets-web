@@ -22,6 +22,7 @@ Without devenv: `go generate ./... && go run . -api http://127.0.0.1:8338`.
 | `-listen` (`BEETS_WEB_LISTEN`) | `127.0.0.1:8339` | Listen address. Reach it only through the proxy that signs people in. |
 | `-api` (`BEETS_WEB_API`) | `http://127.0.0.1:8338` | beets-api base URL                              |
 | `-actor-header` (`BEETS_WEB_ACTOR_HEADER`) | `Remote-User` | The request header that names the person making it, which beets-api records as the Actor. A request without it gets a 401. |
+| `-thumb-cache` (`BEETS_WEB_THUMB_CACHE`) | none | Directory to keep cover thumbnails in. Without it the Library shows full-size covers. |
 
 ## Container image
 
@@ -55,7 +56,7 @@ These features need endpoints that beets-api doesn't have yet. Until they exist,
 
 ## Album art
 
-The Art tab searches the iTunes Search API and the Deezer API (no keys), and fetches images from URLs you enter, so beets-web needs outbound HTTPS. Set art sends the image to beets-api's `PUT /albums/{id}/art`, which saves it as `cover.jpg` or `cover.png`; Remove art calls `DELETE /albums/{id}/art`. beets-api moves replaced and removed art to its Trash. Every request carries `X-Beets-API-Client: beets-web`, so beets-api's audit shows which changes came from the UI. When an Album already has art, the UI shows the current and new art side by side first; the fetched image waits in memory for up to an hour.
+The Art tab searches the iTunes Search API and the Deezer API (no keys), and fetches images from URLs you enter, so beets-web needs outbound HTTPS. Set art sends the image to beets-api's `PUT /albums/{id}/art`, which saves it as `cover.jpg` or `cover.png`; Remove art calls `DELETE /albums/{id}/art`. beets-api moves replaced and removed art to its Trash. Every request carries `X-Beets-API-Client: beets-web`, so beets-api's audit shows which changes came from the UI. When an Album already has art, the UI shows the current and new art side by side first; the fetched image waits in memory for up to an hour. With `BEETS_WEB_THUMB_CACHE` set, covers in the Library are thumbnails (at most 320 px, JPEG on white) made once from beets-api's art and kept in that directory, along with which Albums have no art. A cached answer is trusted for an hour, then checked against beets-api's ETag and only remade if the cover changed. Set art and Remove art drop that Album's thumbnail straight away; art changed outside beets-web shows within the hour. The browser checks each thumbnail and gets a 304 when it is unchanged. The Album page always shows the full image.
 
 ## Library
 

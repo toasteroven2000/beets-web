@@ -4,6 +4,8 @@ import "strconv"
 
 func artURL(id int) string { return "/albums/" + strconv.Itoa(id) + "/art" }
 
+func thumbURL(id int) string { return "/albums/" + strconv.Itoa(id) + "/thumb" }
+
 // artTab shows an Album's art beside the ways to Set art: search iTunes and
 // Deezer, enter a URL, or upload a file, one at a time.
 templ artTab(p recordPage) {
