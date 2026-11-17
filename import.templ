@@ -121,6 +121,14 @@ templ importEntriesPaging(p importStartPage) {
 	}
 }
 
+// importAgainButton starts a new Import of the same folders that doesn't skip
+// what this one finished or skipped. Duplicates still get beets' prompt.
+templ importAgainButton(op importOp, class string) {
+	<form method="post" action={ templ.SafeURL("/imports/" + string(op.ID) + "/again") } class={ class }>
+		<button class="btn btn-sm btn-outline-secondary text-nowrap" title="Start a new Import of these folders, including what this Import finished or skipped. Albums already in the Library get the duplicate prompt."><i class="bi bi-arrow-repeat" aria-hidden="true"></i> Import again</button>
+	</form>
+}
+
 // importHistory lists past Imports, newest first.
 templ importHistory(p importStartPage) {
 	<form method="get" action="/import" class="d-flex flex-wrap gap-2 align-items-end mb-3">
@@ -148,7 +156,7 @@ templ importHistory(p importStartPage) {
 	} else {
 		<table class="table table-sm align-middle">
 			<thead>
-				<tr><th>Import</th><th>Status</th><th>Paths</th><th>Result</th><th>Started</th></tr>
+				<tr><th>Import</th><th>Status</th><th>Paths</th><th>Result</th><th>Started</th><th><span class="visually-hidden">Actions</span></th></tr>
 			</thead>
 			<tbody>
 				for _, op := range p.Imports {
@@ -162,6 +170,11 @@ templ importHistory(p importStartPage) {
 						</td>
 						<td class="small">{ countsText(op) }</td>
 						<td class="small text-nowrap">{ shortTime(op.CreatedAt) }</td>
+						<td class="text-end">
+							if op.CanImportAgain() {
+								@importAgainButton(op, "")
+							}
+						</td>
 					</tr>
 				}
 			</tbody>
@@ -205,6 +218,12 @@ templ importView(pg importPage) {
 				<span class={ "badge", importStatusClass(op.Status) }>{ statusText(op.Status) }</span>
 				if op.Request.Singletons {
 					<span class="badge text-bg-light border">singletons</span>
+				}
+				if op.Request.Again() {
+					<span class="badge text-bg-light border">imported again</span>
+				}
+				if op.CanImportAgain() {
+					@importAgainButton(op, "ms-auto")
 				}
 				if importActive(op.Status) {
 					<form method="post" action={ templ.SafeURL("/imports/" + id + "/abort") } class="ms-auto">

@@ -570,3 +570,86 @@ func TestDuplicatePromptKeepsItsChoicesAboveTheExplanations(t *testing.T) {
 		t.Errorf("order: existing %d, Skip button %d, explanations %d", existing, skip, help)
 	}
 }
+
+func TestImportAgainStartsANewImportOfTheSameFoldersWithoutResume(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"id": 7, "status": "completed", "request": map[string]any{"paths": []string{"/in/a", "/in/b"}, "singletons": true}})
+	}
+	f.routes["POST /imports"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 202, map[string]any{"id": 8, "status": "running"})
+	}
+	rec := post(t, h, "/imports/7/again", nil)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/imports/8" {
+		t.Fatalf("%d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	_, body := f.last(t, "POST", "/imports")
+	var got map[string]any
+	json.Unmarshal([]byte(body), &got)
+	if got["resume"] != false || got["singletons"] != true || len(got["paths"].([]any)) != 2 {
+		t.Errorf("body %s", body)
+	}
+}
+
+func TestANewImportStillResumes(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["POST /imports"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 202, map[string]any{"id": 7, "status": "running"})
+	}
+	post(t, h, "/imports", url.Values{"path": {"/in/a"}})
+	if _, body := f.last(t, "POST", "/imports"); strings.Contains(body, "resume") {
+		t.Errorf("a new Import sent %s", body)
+	}
+}
+
+func TestImportAgainIsOfferedOnlyOnceAnImportIsOver(t *testing.T) {
+	for status, offered := range map[string]bool{"completed": true, "aborted": true, "failed": true, "interrupted": true, "running": false, "waiting_for_choice": false} {
+		f, h := newTest(t)
+		f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, 200, map[string]any{"id": 7, "status": status, "request": map[string]any{"paths": []string{"/in"}}})
+		}
+		if got := strings.Contains(get(t, h, "/imports/7").Body.String(), `action="/imports/7/again"`); got != offered {
+			t.Errorf("%s: Import again offered %v", status, got)
+		}
+		if !offered {
+			if rec := post(t, h, "/imports/7/again", nil); rec.Header().Get("Location") != "/imports/7" {
+				t.Errorf("%s: Import again went to %q", status, rec.Header().Get("Location"))
+			}
+			for _, r := range f.requests {
+				if r.Method == "POST" && r.URL.Path == "/imports" {
+					t.Errorf("%s: started an Import", status)
+				}
+			}
+		}
+	}
+}
+
+func TestImportHistoryOffersImportAgainOnFinishedImports(t *testing.T) {
+	f, h := newTest(t)
+	importsRoute(f)
+	mustContain(t, get(t, h, "/import?tab=history"), `action="/imports/8/again"`, `action="/imports/7/again"`, "Import again")
+}
+
+func TestAnImportedAgainImportSaysSo(t *testing.T) {
+	f, h := newTest(t)
+	f.routes["GET /imports/8"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"id": 8, "status": "completed", "request": map[string]any{"paths": []string{"/in"}, "resume": false}})
+	}
+	mustContain(t, get(t, h, "/imports/8"), "imported again")
+}
+
+func TestImportAgainWhileAnotherIsActiveSaysSo(t *testing.T) {
+	f, h := newTest(t)
+	importPathsRoute(f)
+	f.routes["GET /imports/7"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"id": 7, "status": "completed", "request": map[string]any{"paths": []string{"/in"}}})
+	}
+	f.routes["POST /imports"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 409, map[string]any{"detail": "import 4 is still active"})
+	}
+	rec := post(t, h, "/imports/7/again", nil)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status %d", rec.Code)
+	}
+	mustContain(t, rec, "Import 4 is still active", `href="/imports/4"`)
+}

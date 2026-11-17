@@ -68,6 +68,8 @@ The Import page has two tabs. Import Paths browses beets-api's Import Paths (`GE
 
 A finished Import has an "Undo this Import…" button (`GET` and `POST /imports/{id}/undo` in beets-api). It previews what would be removed and asks before deleting the copied files. beets-api only allows it for an Import that copied its files, when nothing it made has changed since, so otherwise the page lists the reasons.
 
+An Import that has ended (finished, aborted, failed or interrupted) has an **Import again** button, on its page and in History. It starts a new Import of the same folders with `resume: false` (beets-api `POST /imports`), so folders the earlier Import finished or skipped get Tasks again instead of being passed over. The earlier Import's progress is left as it was, and Albums already in the Library still get the duplicate prompt. Such an Import is marked "imported again".
+
 beets-api only accepts `Host: 127.0.0.1` or `localhost`, so beets-web in another container can't reach it yet (beets-api `.scratch/imports/issues/02-allowed-hosts.md`).
 
 ## Remove

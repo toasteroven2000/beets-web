@@ -184,6 +184,10 @@ func noMetadataSource(cfg map[string]any) bool {
 	return true
 }
 
+// CanImportAgain tells whether an Import is over, so its folders can be
+// imported again.
+func (op importOp) CanImportAgain() bool { return !importActive(op.Status) && !op.Undoing }
+
 // importActive is a status in which an Import still needs the UI.
 func importActive(status string) bool {
 	return status == "running" || status == "waiting_for_choice"
@@ -631,12 +635,33 @@ func (s *server) handleCreateImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	dir := r.PostForm.Get("path")
-	here := r.PostForm.Get("here")
-	op, err := s.api.StartImport(r.Context(), importRequest{
-		Paths:      []string{dir},
+	s.startImport(w, r, importRequest{
+		Paths:      []string{r.PostForm.Get("path")},
 		Singletons: r.PostForm.Get("singletons") != "",
-	})
+	}, r.PostForm.Get("here"))
+}
+
+// handleImportAgain starts a new Import of an earlier one's folders, without
+// skipping what that Import finished or skipped. Its own progress stays.
+func (s *server) handleImportAgain(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	op, err := s.api.Import(r.Context(), id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if !op.CanImportAgain() {
+		http.Redirect(w, r, "/imports/"+url.PathEscape(id), http.StatusSeeOther)
+		return
+	}
+	resume := false
+	s.startImport(w, r, importRequest{Paths: op.Request.Paths, Singletons: op.Request.Singletons, Resume: &resume}, "")
+}
+
+// startImport starts an Import and goes to it, or shows the Import page with
+// why beets-api refused.
+func (s *server) startImport(w http.ResponseWriter, r *http.Request, req importRequest, here string) {
+	op, err := s.api.StartImport(r.Context(), req)
 	if err == nil {
 		http.Redirect(w, r, "/imports/"+url.PathEscape(string(op.ID)), http.StatusSeeOther)
 		return

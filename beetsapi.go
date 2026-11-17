@@ -457,7 +457,11 @@ type importBrowse struct {
 type importRequest struct {
 	Paths      []string `json:"paths"`
 	Singletons bool     `json:"singletons"`
+	Resume     *bool    `json:"resume,omitempty"` // false: consider again what earlier Imports finished or skipped
 }
+
+// Again is an Import of what an earlier one finished or skipped.
+func (r importRequest) Again() bool { return r.Resume != nil && !*r.Resume }
 
 // fileChanges are the field changes applying a Candidate makes to one file.
 type fileChanges struct {
