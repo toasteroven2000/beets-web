@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // libraryAPI answers /list per scope: a few Albums and Items, and how many in all.
@@ -201,5 +203,49 @@ func TestNavbarHasNoSearchAndLibraryHasSearchHelp(t *testing.T) {
 	mustContain(t, rec, "Search help", `id="search-help"`, "Search uses beets' query syntax", "To use Regexp", "Common fields", `placeholder="Search the Library, or a beets query`)
 	if strings.Contains(get(t, h, "/import").Body.String(), `role="search"`) {
 		t.Error("a navbar search on the Import page")
+	}
+}
+
+// Each fake call holds its answer until all three are in flight, so a Library
+// that waits for one before asking the next never gets all three together.
+func TestLibraryAsksBeetsAPIForEverythingAtOnce(t *testing.T) {
+	f, h := newTest(t)
+	libraryAPI(f, 21, 276)
+	var mu sync.Mutex
+	inFlight := 0
+	all := make(chan struct{})
+	together := func(next func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+		return func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			if inFlight++; inFlight == 3 {
+				close(all)
+			}
+			mu.Unlock()
+			select {
+			case <-all:
+			case <-time.After(2 * time.Second):
+				t.Errorf("%s %s waited for the other calls", r.URL.Path, r.URL.Query().Get("scope"))
+			}
+			next(w, r)
+		}
+	}
+	f.routes["GET /list"] = together(f.routes["GET /list"])
+	f.routes["GET /config"] = together(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{}) })
+	rec := get(t, h, "/library")
+	mustContain(t, rec, `Albums <span class="badge text-bg-primary">21</span>`, `Items <span class="badge text-bg-secondary">276</span>`)
+}
+
+func TestLibraryArtistFilterUsesTheConfiguredSeparators(t *testing.T) {
+	f, h := newTest(t)
+	libraryAPI(f, 1, 1)
+	f.routes["GET /config"] = func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"beets_api": map[string]any{"artist_separators": []any{" x "}}})
+	}
+	get(t, h, "/library?artist=Bing")
+	want := map[string]string{"album": artistQuery(albums, "Bing", []string{" x "}), "item": artistQuery(items, "Bing", []string{" x "})}
+	for k, q := range want {
+		if got := listCalls(f)[k][0].Get("query"); !strings.HasPrefix(got, q) {
+			t.Errorf("%s query %q, want it to start %q", k, got, q)
+		}
 	}
 }

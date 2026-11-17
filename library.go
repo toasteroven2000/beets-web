@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 )
 
 // librarySorts are the orders the Library can be listed in, by name.
@@ -182,31 +183,49 @@ func (s *server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 		p.Show = "albums"
 	}
 	ctx := r.Context()
-	seps := s.separators(ctx)
-	p.Separators = seps
-	list := func(k scope, limit, offset int) (tableData, error) {
-		res, err := s.api.List(ctx, k, sortQuery(p.Query(k), k, p.Sort), limit, offset, listFields[k])
-		if err != nil {
-			return tableData{}, err
-		}
-		p.Counts[k] = res.Total
-		return tableData{Scope: k, Query: p.Query(k), Rows: res.Results, Total: res.Total, Next: nextURL(r, res), Separators: seps}, nil
+	show, other := albums, items
+	if p.Show == "items" {
+		show, other = items, albums
 	}
-	count := func(k scope) error {
-		res, err := s.api.List(ctx, k, p.Query(k), 1, 0, []string{"id"})
-		p.Counts[k] = res.Total
-		return err
+	// The three beets-api calls go out together. Only an Artist filter needs
+	// the separators before the lists can be asked for.
+	sepsc := make(chan []string, 1)
+	go func() { sepsc <- s.separators(ctx) }()
+	if p.Filters.Artist != "" {
+		p.Separators = <-sepsc
 	}
-	var err error
-	switch p.Show {
-	case "items":
-		if p.Items, err = list(items, pageSize, offsetParam(r)); err == nil && !isMore(r) {
-			err = count(albums)
+	var listRes, countRes listResult
+	var listErr, countErr error
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		listRes, listErr = s.api.List(ctx, show, sortQuery(p.Query(show), show, p.Sort), pageSize, offsetParam(r), listFields[show])
+	}()
+	if !isMore(r) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			countRes, countErr = s.api.List(ctx, other, p.Query(other), 1, 0, []string{"id"})
+		}()
+	}
+	wg.Wait()
+	if p.Filters.Artist == "" {
+		p.Separators = <-sepsc
+	}
+	err := listErr
+	if err == nil {
+		err = countErr
+		p.Counts[show] = listRes.Total
+		table := tableData{Scope: show, Query: p.Query(show), Rows: listRes.Results, Total: listRes.Total, Next: nextURL(r, listRes), Separators: p.Separators}
+		if show == items {
+			p.Items = table
+		} else {
+			p.Albums = table
 		}
-	default:
-		if p.Albums, err = list(albums, pageSize, offsetParam(r)); err == nil && !isMore(r) {
-			err = count(items)
-		}
+	}
+	if !isMore(r) {
+		p.Counts[other] = countRes.Total
 	}
 	if err != nil {
 		if isStatus(err, http.StatusBadRequest) && !isMore(r) {
